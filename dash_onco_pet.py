@@ -7,14 +7,17 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-st.set_page_config(page_title="Painel Onco — dados reais", page_icon=":material/monitoring:", layout="wide")
+st.set_page_config(page_title="PET-Saúde | Painel de oncologia", page_icon=":material/monitoring:", layout="wide")
 ARQUIVO_SIM = Path(__file__).parent / "dados" / "sim_oncologia_agregado.json"
 ARQUIVO_POPULACAO = Path(__file__).parent / "dados" / "populacao_ibge.json"
 ARQUIVO_ESTRUTURA = Path(__file__).parent / "dados" / "estrutura_oncologia_cnes.json"
 ARQUIVO_APAC = Path(__file__).parent / "dados" / "apac_oncologia.json"
 ARQUIVO_CIRURGIAS = Path(__file__).parent / "dados" / "cirurgias_oncologicas_sih.json"
 ARQUIVO_RHC_PEDIATRICO = Path(__file__).parent / "dados" / "rhc_pediatrico_iccc.json"
+ARQUIVO_CUSTOS = Path(__file__).parent / "dados" / "custos_oncologia_sia_sih.json"
 CORES = ["#14532d", "#16a34a", "#4ade80", "#0f766e", "#f59e0b", "#dc2626", "#7c3aed", "#0369a1"]
+MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho",
+         "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"]
 
 
 @st.cache_data(show_spinner=False)
@@ -71,12 +74,34 @@ def carregar_rhc_pediatrico(caminho: str, modificado_em: float) -> tuple[pd.Data
     return dados, payload["metadados"]
 
 
+@st.cache_data(show_spinner=False)
+def carregar_custos(caminho: str, modificado_em: float) -> tuple[pd.DataFrame, dict]:
+    del modificado_em
+    with Path(caminho).open(encoding="utf-8") as arquivo:
+        payload = json.load(arquivo)
+    dados = pd.DataFrame(payload["dados"])
+    dados[["ano", "mes", "valor"]] = dados[["ano", "mes", "valor"]].apply(pd.to_numeric)
+    return dados, payload["metadados"]
+
+
 def soma(df: pd.DataFrame) -> int:
     return int(df["obitos"].sum())
 
 
 def numero(valor: int | float) -> str:
     return f"{valor:,.0f}".replace(",", ".")
+
+
+def moeda_compacta(valor: int | float) -> str:
+    if abs(valor) >= 1_000_000_000:
+        numero_formatado = f"{valor / 1_000_000_000:.2f} bi"
+    elif abs(valor) >= 1_000_000:
+        numero_formatado = f"{valor / 1_000_000:.2f} mi"
+    elif abs(valor) >= 1_000:
+        numero_formatado = f"{valor / 1_000:.2f} mil"
+    else:
+        numero_formatado = f"{valor:.2f}"
+    return f"R$ {numero_formatado.replace('.', ',')}"
 
 
 def barras(df: pd.DataFrame, categoria: str, titulo: str, chave: str) -> None:
@@ -102,14 +127,15 @@ def calcular_taxas(obitos: pd.DataFrame, denominadores: pd.DataFrame, grupos: li
     return resultado
 
 
-if any(not arquivo.exists() for arquivo in [ARQUIVO_SIM, ARQUIVO_POPULACAO, ARQUIVO_ESTRUTURA, ARQUIVO_APAC, ARQUIVO_CIRURGIAS, ARQUIVO_RHC_PEDIATRICO]):
+if any(not arquivo.exists() for arquivo in [ARQUIVO_SIM, ARQUIVO_POPULACAO, ARQUIVO_ESTRUTURA, ARQUIVO_APAC, ARQUIVO_CIRURGIAS, ARQUIVO_RHC_PEDIATRICO, ARQUIVO_CUSTOS]):
     st.error("Os agregados do SIM, IBGE, CNES, SIA/APAC, SIH/AIH e RHC precisam ser criados antes de executar o painel.")
     st.code(".venv/bin/python gerar_json_sim.py '/home/alex/CSV_SIM/CSV'\n"
             ".venv/bin/python gerar_populacao_ibge.py dados/projecoes_2024_tab1_idade_simples.xlsx\n"
             ".venv/bin/python gerar_estrutura_cnes.py\n"
             ".venv/bin/python gerar_apac_oncologia.py\n"
             ".venv/bin/python gerar_cirurgias_sih.py\n"
-            ".venv/bin/python gerar_rhc_pediatrico.py PACOTE_RHC.zip dados/ICCC-2017.xlsx", language="bash")
+            ".venv/bin/python gerar_rhc_pediatrico.py PACOTE_RHC.zip dados/ICCC-2017.xlsx\n"
+            ".venv/bin/python gerar_custos_oncologia.py", language="bash")
     st.stop()
 
 sim, metadados = carregar_sim(str(ARQUIVO_SIM), ARQUIVO_SIM.stat().st_mtime)
@@ -118,6 +144,7 @@ estrutura, metadados_estrutura = carregar_estrutura(str(ARQUIVO_ESTRUTURA), ARQU
 apac, tempo_apac, metadados_apac = carregar_apac(str(ARQUIVO_APAC), ARQUIVO_APAC.stat().st_mtime)
 cirurgias, metadados_cirurgias = carregar_cirurgias(str(ARQUIVO_CIRURGIAS), ARQUIVO_CIRURGIAS.stat().st_mtime)
 rhc_ped, metadados_rhc = carregar_rhc_pediatrico(str(ARQUIVO_RHC_PEDIATRICO), ARQUIVO_RHC_PEDIATRICO.stat().st_mtime)
+custos, metadados_custos = carregar_custos(str(ARQUIVO_CUSTOS), ARQUIVO_CUSTOS.stat().st_mtime)
 anos_provisorios = {int(ano): situacao for ano, situacao in metadados.get("periodos_provisorios", {}).items()}
 with st.sidebar:
     st.header("Filtros")
@@ -183,6 +210,16 @@ if faixas:
 if segmentos and "Pediátrico" not in segmentos:
     rhc_ped_filtro = rhc_ped_filtro.iloc[0:0]
 
+custos_filtro = custos[custos.ano.between(*periodo)].copy()
+for coluna_custo, valores in [
+    ("tipo_cancer", tipos), ("regiao_atendimento", regioes), ("uf_atendimento", ufs),
+    ("sexo", sexos), ("faixa_etaria", faixas),
+]:
+    if valores:
+        custos_filtro = custos_filtro[custos_filtro[coluna_custo].isin(valores)]
+if segmentos:
+    custos_filtro = custos_filtro[custos_filtro.faixa_etaria.isin(faixas_segmento)]
+
 # Denominadores compatíveis com os filtros. A revisão 2024 do IBGE começa em 2000.
 ufs_taxa = ufs or [uf for uf in base_uf.uf.unique() if uf != "Ignorada"]
 sexos_taxa = [sexo for sexo in (sexos or ["Masculino", "Feminino"]) if sexo in {"Masculino", "Feminino"}]
@@ -204,10 +241,22 @@ obitos_taxa = filtro[filtro.ano.isin(anos_taxa)].copy()
 taxa_disponivel = bool(anos_taxa and not pop_filtro.empty and sexos_taxa and faixas_taxa)
 taxa_periodo = soma(obitos_taxa) / pop_filtro.populacao.sum() * 100_000 if taxa_disponivel else None
 
-st.title(":material/monitoring: Painel integrado de oncologia")
-st.caption("Mortalidade por neoplasias malignas com dados reais do SIM/DATASUS")
-st.info("O painel integra **SIM, IBGE, CNES, SIA/APAC, SIH/AIH e RHC**. Ele responde perguntas sobre mortalidade, "
-        "estrutura, tratamentos e deslocamento municipal sem usar valores simulados.")
+with st.container(border=True):
+    st.caption(":material/account_balance: PROGRAMA DE EDUCAÇÃO PELO TRABALHO PARA A SAÚDE • GOVERNO FEDERAL")
+    st.title("PET-Saúde | Painel integrado de oncologia", icon=":material/monitoring:")
+    st.markdown(
+        "**Inteligência em saúde para apoiar ensino, pesquisa e gestão do cuidado oncológico no SUS.**"
+    )
+    st.caption(
+        "Indicadores de mortalidade, estrutura assistencial, acesso, tratamentos e custos, "
+        "construídos exclusivamente com dados públicos oficiais."
+    )
+    with st.container(horizontal=True, vertical_alignment="center"):
+        st.badge("PET-Saúde", color="green", icon=":material/school:")
+        st.badge("Sistema Único de Saúde", color="blue", icon=":material/health_and_safety:")
+        st.badge("Abrangência nacional", color="violet", icon=":material/public:")
+        st.badge("Dados oficiais", color="gray", icon=":material/verified:")
+    st.caption("Fontes integradas: SIM, IBGE, CNES, SIA/APAC, SIH/AIH e RHC.")
 provisorios_no_recorte = {ano: situacao for ano, situacao in anos_provisorios.items() if periodo[0] <= ano <= periodo[1]}
 if provisorios_no_recorte:
     descricao = "; ".join(f"{ano}: {situacao}" for ano, situacao in sorted(provisorios_no_recorte.items()))
@@ -216,8 +265,8 @@ if filtro.empty:
     st.warning("Nenhum óbito corresponde aos filtros selecionados.")
     st.stop()
 
-abas = st.tabs(["Visão geral", "Mortalidade", "Perfil", "Incidência", "Estrutura", "Acesso",
-                "Desfechos", "Pediatria e suporte", "Perguntas e fontes", "Metodologia"])
+abas = st.tabs(["Visão geral", "Custos", "Mortalidade", "Perfil", "Incidência", "Estrutura",
+                "Acesso", "Desfechos", "Pediatria e suporte", "Perguntas e fontes", "Metodologia"])
 
 with abas[0]:
     serie_anual = filtro.groupby("ano")["obitos"].sum().reset_index()
@@ -235,7 +284,7 @@ with abas[0]:
     with direita:
         barras(filtro, "tipo_cancer", "Óbitos por tipo de câncer", "geral_tipo")
 
-with abas[1]:
+with abas[2]:
     st.subheader("Mortalidade registrada no SIM")
     st.caption("Causa básica C00–C97. Taxas calculadas com as Projeções da População do IBGE — Revisão 2024.")
     medida = st.segmented_control("Medida", ["Taxa por 100 mil", "Contagem"], default="Taxa por 100 mil")
@@ -276,7 +325,7 @@ with abas[1]:
         st.caption("As séries de contagem incluem 2025/2026 como disponibilizadas pelo SIM; as taxas terminam no último ano consolidado.")
     st.info("As taxas são brutas. A próxima melhoria metodológica será a padronização por idade para comparações territoriais.")
 
-with abas[2]:
+with abas[3]:
     st.subheader("Diferenças por idade, sexo e residência")
     perfil_medida = st.segmented_control("Exibir perfil como", ["Taxa por 100 mil", "Contagem"], default="Taxa por 100 mil")
     perfil_taxa = perfil_medida == "Taxa por 100 mil" and taxa_disponivel
@@ -320,13 +369,13 @@ with abas[2]:
         figura_territorial.update_traces(hovertemplate="<b>%{label}</b><br>Óbitos: %{value:,.0f}<br>Participação no nível: %{percentParent:.1%}<extra></extra>")
         st.plotly_chart(figura_territorial, key="perfil_hierarquia_territorial")
 
-with abas[3]:
+with abas[4]:
     st.subheader("Incidência do câncer")
     pendencia("Incidência por tipo, tempo e perfil", "O SIM registra mortes, não casos novos. Não é válido "
               "usar óbitos como incidência. A pergunta exige casos novos, território coberto e população do mesmo período.",
               "RCBP/INCA + população IBGE")
 
-with abas[4]:
+with abas[5]:
     st.subheader("Estrutura assistencial")
     competencia = metadados_estrutura["competencia"]
     st.caption(f"Habilitações ativas no CNES — competência {competencia[4:6]}/{competencia[:4]}. Os filtros de região e UF da barra lateral também se aplicam aqui.")
@@ -365,7 +414,7 @@ with abas[4]:
                            "estrutura_oncologica_cnes.csv", "text/csv", icon=":material/download:")
     pendencia("Uso ou ocupação", "Exige produção e um denominador validado de capacidade.", "CNES + SIA/SIH + capacidade")
 
-with abas[5]:
+with abas[6]:
     st.subheader("Acesso ao diagnóstico e tratamento")
     competencia_apac = metadados_apac["ultima_competencia"]
     st.caption(f"SIA/APAC de 01/2025 a {competencia_apac[4:6]}/{competencia_apac[:4]}. Território corresponde ao local de atendimento.")
@@ -437,14 +486,14 @@ with abas[5]:
     pendencia("Diagnosticados versus tratados", "Exige identificação de caso e início do tratamento.", "Painel Oncológico/RHC")
     pendencia("Fila APS → regulador → prestador", "Exige timestamps dos eventos locais de regulação.", "Regulador municipal")
 
-with abas[6]:
+with abas[7]:
     st.subheader("Desfechos")
     st.success("Disponível: óbitos por tipo de câncer, período, idade, sexo e residência.")
     pendencia("Cura, recorrência e resposta", "Esses eventos não são registrados no SIM.", "RHC/prontuário")
     pendencia("Sobrevida global e livre de doença", "Exige coorte, data inicial, seguimento, óbito vinculado e censura.", "RHC/prontuário + SIM")
     pendencia("Tratamento e desfecho", "A análise precisa controlar estágio, gravidade e seleção do paciente.", "Base clínica longitudinal")
 
-with abas[7]:
+with abas[8]:
     st.subheader("Câncer pediátrico")
     ped = filtro[filtro.segmento == "Pediátrico"]
     with st.container(horizontal=True):
@@ -545,7 +594,116 @@ with abas[7]:
     pendencia("Casas de apoio", "Exige cadastro georreferenciado e vínculo com centros pediátricos.", "Cadastro local + CNES")
     pendencia("Qualidade de vida, escola e doenças secundárias", "Não são inferíveis de registros de mortalidade.", "Prontuário + pesquisa primária")
 
-with abas[8]:
+with abas[1]:
+    st.subheader("Custos SIA/SIH")
+    st.caption("Valores administrativos da atenção ambulatorial e hospitalar em oncologia, conforme os filtros do painel.")
+    st.link_button(
+        "Fonte: DATASUS",
+        "https://ftp.datasus.gov.br/dissemin/publicos/",
+        icon=":material/database:",
+    )
+
+    ultima_competencia_custos = str(metadados_custos["ultima_competencia"])
+    ultimo_ano_custos = int(ultima_competencia_custos[:4])
+    ultimo_mes_custos = int(ultima_competencia_custos[4:])
+    if ultimo_mes_custos < 12 and periodo[0] <= ultimo_ano_custos <= periodo[1]:
+        st.warning(
+            f"Base em atualização: {ultimo_ano_custos} possui dados processados até "
+            f"{MESES[ultimo_mes_custos - 1]}. "
+            "Totais do ano podem estar incompletos."
+        )
+
+    if custos_filtro.empty:
+        st.info("Não há valores SIA/SIH para os filtros e o período selecionados.")
+    else:
+        total_custos = float(custos_filtro.valor.sum())
+        total_sia = float(custos_filtro.loc[custos_filtro.sistema == "SIA", "valor"].sum())
+        total_sih = float(custos_filtro.loc[custos_filtro.sistema == "SIH", "valor"].sum())
+        serie_mensal_custos = (
+            custos_filtro.groupby(["ano", "mes"], observed=True).valor.sum().reset_index()
+        )
+        serie_mensal_custos["competencia"] = pd.to_datetime(dict(
+            year=serie_mensal_custos.ano, month=serie_mensal_custos.mes, day=1
+        ))
+
+        with st.container(horizontal=True):
+            st.metric(
+                "Custo total em oncologia",
+                moeda_compacta(total_custos),
+                help="Soma dos valores aprovados no SIA e registrados nas AIH.",
+                border=True,
+                chart_data=serie_mensal_custos.valor.tolist(),
+                chart_type="bar",
+            )
+            st.metric(
+                "Custos SIA",
+                moeda_compacta(total_sia),
+                help="Valor aprovado da produção ambulatorial (AP_VL_AP).",
+                border=True,
+            )
+            st.metric(
+                "Custos SIH",
+                moeda_compacta(total_sih),
+                help="Valor total registrado nas AIH (VAL_TOT).",
+                border=True,
+            )
+
+        periodicidade_custos = st.segmented_control(
+            "Evolução dos valores",
+            ["Mensal", "Anual"],
+            default="Mensal",
+            key="custos_periodicidade",
+        )
+        if periodicidade_custos == "Mensal":
+            serie_custos = serie_mensal_custos
+            eixo_custos = "competencia"
+        else:
+            serie_custos = custos_filtro.groupby("ano", observed=True).valor.sum().reset_index()
+            eixo_custos = "ano"
+        st.plotly_chart(px.bar(
+            serie_custos,
+            x=eixo_custos,
+            y="valor",
+            labels={eixo_custos: "Competência" if periodicidade_custos == "Mensal" else "Ano", "valor": "Valor (R$)"},
+            title="Evolução dos valores administrativos",
+            color_discrete_sequence=["#0f766e"],
+        ), key="custos_evolucao")
+
+        esquerda_custos, direita_custos = st.columns(2)
+        por_modalidade = custos_filtro.groupby(["modalidade", "sistema"], observed=True).valor.sum().reset_index()
+        esquerda_custos.plotly_chart(px.bar(
+            por_modalidade,
+            x="modalidade",
+            y="valor",
+            color="sistema",
+            labels={"modalidade": "Modalidade", "valor": "Valor (R$)", "sistema": "Sistema"},
+            title="Composição por modalidade",
+            color_discrete_sequence=["#46639b", "#b85d2d"],
+        ), key="custos_modalidade")
+        por_territorio = (
+            custos_filtro.groupby(["uf_atendimento", "regiao_atendimento"], observed=True).valor.sum()
+            .sort_values(ascending=False).head(15).reset_index()
+        )
+        direita_custos.plotly_chart(px.bar(
+            por_territorio,
+            x="valor",
+            y="uf_atendimento",
+            color="regiao_atendimento",
+            orientation="h",
+            labels={"valor": "Valor (R$)", "uf_atendimento": "UF", "regiao_atendimento": "Região"},
+            title="15 UFs com maiores valores",
+            color_discrete_sequence=CORES,
+        ), key="custos_territorio")
+        st.info(metadados_custos["interpretacao"])
+        st.download_button(
+            "Baixar custos filtrados (CSV)",
+            custos_filtro.to_csv(index=False).encode("utf-8-sig"),
+            "custos_oncologia_sia_sih_filtrados.csv",
+            "text/csv",
+            icon=":material/download:",
+        )
+
+with abas[9]:
     st.subheader("Cobertura do Dashboard")
     cobertura = pd.DataFrame([
         ["Incidência por tipo, tempo e perfil", "Aguardando fonte", "RCBP + IBGE"],
@@ -564,9 +722,9 @@ with abas[8]:
         ["Acolhimento, vida social/escolar e efeitos tardios", "Aguardando fonte", "Cadastros/prontuário/pesquisa"],
     ], columns=["Pergunta", "Situação", "Fonte mínima"])
     st.dataframe(cobertura, hide_index=True)
-    st.caption("Perguntas de custo foram excluídas desta versão, conforme solicitado.")
+    st.caption("Os valores administrativos de oncologia estão disponíveis na aba Custos.")
 
-with abas[9]:
+with abas[10]:
     st.subheader("Fonte e interpretação")
     st.table({"Fonte": metadados["fonte"], "Critério": metadados["criterio"],
         "Período do arquivo": f"{metadados['periodo'][0]}–{metadados['periodo'][1]}",
@@ -591,6 +749,11 @@ with abas[9]:
         "Período": f"{metadados_rhc['periodo'][0]}–{metadados_rhc['periodo'][1]}",
         "Cobertura": metadados_rhc["cobertura_geografica"], "Classificação": metadados_rhc["classificacao"],
         "Unidade de análise": metadados_rhc["unidade"]}, border="horizontal", width="content")
+    st.table({"Custos SIA/SIH": metadados_custos["fonte"],
+        "Período": f"{metadados_custos['periodo'][0]}–{metadados_custos['periodo'][1]}",
+        "Última competência": metadados_custos["ultima_competencia"],
+        "Critério SIA": metadados_custos["criterio_sia"], "Critério SIH": metadados_custos["criterio_sih"]},
+        border="horizontal", width="content")
     st.markdown("- Foram usados os arquivos nacionais `DOBR`; os estaduais não foram somados novamente.\n"
                 "- Tipo de câncer é derivado da causa básica CID-10.\n"
                 "- Contagem de óbitos não é incidência nem letalidade.\n"
