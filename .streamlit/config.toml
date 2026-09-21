@@ -1,0 +1,33 @@
+[theme]
+base = "light"
+primaryColor = "#15803d"
+baseRadius = "medium"
+showWidgetBorder = true
+showSidebarBorder = true
+
+[theme.light]
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f1f5f2"
+textColor = "#17231b"
+borderColor = "#d5ded8"
+chartCategoricalColors = ["#14532d", "#16a34a", "#4ade80", "#0f766e", "#f59e0b", "#dc2626", "#7c3aed", "#0369a1"]
+chartSequentialColors = ["#f0fdf4", "#dcfce7", "#bbf7d0", "#86efac", "#4ade80", "#22c55e", "#16a34a", "#15803d", "#166534", "#14532d"]
+
+[theme.dark]
+backgroundColor = "#0e1511"
+secondaryBackgroundColor = "#18231c"
+textColor = "#eef7f0"
+borderColor = "#34483a"
+primaryColor = "#4ade80"
+chartCategoricalColors = ["#4ade80", "#22c55e", "#2dd4bf", "#38bdf8", "#fbbf24", "#fb7185", "#a78bfa", "#60a5fa"]
+chartSequentialColors = ["#f0fdf4", "#dcfce7", "#bbf7d0", "#86efac", "#4ade80", "#22c55e", "#16a34a", "#15803d", "#166534", "#14532d"]
+
+[theme.light.sidebar]
+backgroundColor = "#f6faf7"
+secondaryBackgroundColor = "#e7f2ea"
+textColor = "#17231b"
+
+[theme.dark.sidebar]
+backgroundColor = "#101a14"
+secondaryBackgroundColor = "#1d2d22"
+textColor = "#eef7f0"

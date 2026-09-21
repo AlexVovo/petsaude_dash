@@ -121,6 +121,7 @@ rhc_ped, metadados_rhc = carregar_rhc_pediatrico(str(ARQUIVO_RHC_PEDIATRICO), AR
 anos_provisorios = {int(ano): situacao for ano, situacao in metadados.get("periodos_provisorios", {}).items()}
 with st.sidebar:
     st.header("Filtros")
+    st.caption(":material/contrast: Tema claro/escuro: abra **⋮ → Settings → Theme**.")
     anos = sorted(sim.ano.unique())
     periodo = st.slider("Período do óbito", int(min(anos)), int(max(anos)), (int(min(anos)), int(max(anos))))
     tipos = st.multiselect("Tipo de câncer", sorted(sim.tipo_cancer.unique()), placeholder="Todos")
