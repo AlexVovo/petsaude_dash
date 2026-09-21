@@ -11,6 +11,23 @@ python3 -m pip install -r requirements.txt
 streamlit run dash_onco_pet.py
 ```
 
+O arquivo `requirements.txt` contém somente as dependências necessárias para executar e publicar o dashboard. Para recriar os agregados a partir das fontes oficiais, instale também as dependências de processamento:
+
+```bash
+python3 -m pip install -r requirements-data.txt
+```
+
+## Publicar no Streamlit Community Cloud
+
+Use estas coordenadas na tela **Create app**:
+
+- Repositório: `AlexVovo/petsaude_dash`
+- Branch: `main`
+- Arquivo principal: `dash_onco_pet.py`
+- Python: `3.12`
+
+O aplicativo não exige secrets nem pacotes Linux adicionais.
+
 ## Gerar o agregado do SIM
 
 Com os CSVs nacionais e estaduais na pasta informada, execute:

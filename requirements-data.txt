@@ -1,0 +1,5 @@
+-r requirements.txt
+numpy>=1.26,<3
+openpyxl>=3.1,<4
+dbfread>=2.0,<3
+pysus>=2.7,<3
