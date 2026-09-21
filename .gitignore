@@ -1,0 +1,8 @@
+.venv/
+.cache/
+.agents/
+.claude/
+.codex/
+__pycache__/
+*.pyc
+*.tmp
