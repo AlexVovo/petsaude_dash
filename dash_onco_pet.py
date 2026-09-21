@@ -304,6 +304,20 @@ with abas[2]:
     st.plotly_chart(px.bar(cruzamento, x=comparar, y=valor_cruzamento, color="tipo_cancer", barmode="group",
         labels={comparar: comparar.replace("_", " ").title(), valor_cruzamento: "Taxa por 100 mil" if perfil_taxa else "Óbitos", "tipo_cancer": "Tipo de câncer"},
         color_discrete_sequence=CORES), key="perfil_comparacao")
+    st.subheader("Hierarquia territorial dos óbitos")
+    st.caption("Clique em uma região ou UF para aprofundar; clique no centro para retornar ao nível anterior.")
+    hierarquia_territorial = filtro[
+        ~filtro.regiao.isin(["Ignorada", ""]) & ~filtro.uf.isin(["Ignorada", ""])
+    ].groupby(["regiao", "uf", "tipo_cancer"], observed=True).obitos.sum().reset_index()
+    if not hierarquia_territorial.empty:
+        figura_territorial = px.sunburst(
+            hierarquia_territorial, path=["regiao", "uf", "tipo_cancer"], values="obitos",
+            color="regiao", color_discrete_sequence=CORES,
+            labels={"regiao": "Região", "uf": "UF", "tipo_cancer": "Tipo de câncer", "obitos": "Óbitos"},
+            title="Região → UF → tipo de câncer",
+        )
+        figura_territorial.update_traces(hovertemplate="<b>%{label}</b><br>Óbitos: %{value:,.0f}<br>Participação no nível: %{percentParent:.1%}<extra></extra>")
+        st.plotly_chart(figura_territorial, key="perfil_hierarquia_territorial")
 
 with abas[3]:
     st.subheader("Incidência do câncer")
@@ -461,6 +475,20 @@ with abas[7]:
         st.plotly_chart(px.bar(grupos_rhc, x="casos", y="grupo_iccc", orientation="h", color="casos",
             labels={"casos": "Casos registrados", "grupo_iccc": ""}, title="Casos por grupo CICI/ICCC-3",
             color_continuous_scale="Greens"), key="ped_iccc_grupos")
+        st.subheader("Hierarquia diagnóstica")
+        st.caption("O tamanho de cada retângulo representa o número de casos. Clique em um grupo para abrir seus subgrupos.")
+        hierarquia_iccc = rhc_ped_filtro.groupby(
+            ["grupo_iccc", "subgrupo_iccc"], observed=True
+        ).casos.sum().reset_index()
+        hierarquia_iccc["classificacao"] = "CICI/ICCC-3"
+        figura_iccc = px.treemap(
+            hierarquia_iccc, path=["classificacao", "grupo_iccc", "subgrupo_iccc"], values="casos",
+            color="grupo_iccc", color_discrete_sequence=CORES,
+            labels={"classificacao": "Classificação", "grupo_iccc": "Grupo", "subgrupo_iccc": "Subgrupo", "casos": "Casos"},
+            title="CICI/ICCC-3: grupos → subgrupos",
+        )
+        figura_iccc.update_traces(hovertemplate="<b>%{label}</b><br>Casos: %{value:,.0f}<br>Participação no nível: %{percentParent:.1%}<extra></extra>")
+        st.plotly_chart(figura_iccc, key="ped_iccc_hierarquia")
         grupos_classificados = rhc_ped_filtro.loc[rhc_ped_filtro.recode_iccc != "999"].groupby(
             "grupo_iccc", observed=True).casos.sum().sort_values(ascending=False)
         if not grupos_classificados.empty:
