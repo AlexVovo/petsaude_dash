@@ -546,7 +546,7 @@ with abas[7]:
     pendencia("Qualidade de vida, escola e doenças secundárias", "Não são inferíveis de registros de mortalidade.", "Prontuário + pesquisa primária")
 
 with abas[8]:
-    st.subheader("Cobertura das perguntas do documento")
+    st.subheader("Cobertura do Dashboard")
     cobertura = pd.DataFrame([
         ["Incidência por tipo, tempo e perfil", "Aguardando fonte", "RCBP + IBGE"],
         ["Hospitais, natureza jurídica e serviços habilitados", "Disponível", "CNES/SAES"],
