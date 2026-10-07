@@ -256,7 +256,51 @@ with st.container(border=True):
         st.badge("Sistema Único de Saúde", color="blue", icon=":material/health_and_safety:")
         st.badge("Abrangência nacional", color="violet", icon=":material/public:")
         st.badge("Dados oficiais", color="gray", icon=":material/verified:")
-    st.caption("Fontes integradas: SIM, IBGE, CNES, SIA/APAC, SIH/AIH e RHC.")
+    st.markdown("**Bases de dados e periodicidade**")
+    competencia_cnes = str(metadados_estrutura["competencia"])
+    competencia_sia = str(metadados_apac["ultima_competencia"])
+    competencia_sih = str(metadados_cirurgias["ultima_competencia"])
+    st.table(pd.DataFrame([
+        {
+            "Base de dados": "SIM/DATASUS — mortalidade",
+            "Periodicidade dos dados": "Anual, com detalhamento mensal dos óbitos",
+            "Período disponível no painel": f"{metadados['periodo'][0]}–{metadados['periodo'][1]} (anos recentes provisórios)",
+        },
+        {
+            "Base de dados": "IBGE — Projeções da População",
+            "Periodicidade dos dados": f"Anual (projeções; revisão {metadados_pop['revisao']})",
+            "Período disponível no painel": f"{metadados_pop['periodo'][0]}–{metadados_pop['periodo'][1]}",
+        },
+        {
+            "Base de dados": "CNES/DATASUS — estrutura assistencial",
+            "Periodicidade dos dados": "Mensal, por competência",
+            "Período disponível no painel": f"{competencia_cnes[4:6]}/{competencia_cnes[:4]} (retrato da competência)",
+        },
+        {
+            "Base de dados": "SIA/SUS — APAC de quimioterapia e radioterapia",
+            "Periodicidade dos dados": "Mensal, por competência",
+            "Período disponível no painel": f"01/{metadados_apac['periodo'][0]}–{competencia_sia[4:6]}/{competencia_sia[:4]}",
+        },
+        {
+            "Base de dados": "SIH/SUS — AIH de internações e cirurgias",
+            "Periodicidade dos dados": "Mensal, por competência",
+            "Período disponível no painel": f"01/{metadados_cirurgias['periodo'][0]}–{competencia_sih[4:6]}/{competencia_sih[:4]}",
+        },
+        {
+            "Base de dados": "Integrador RHC/INCA — registros hospitalares de câncer",
+            "Periodicidade dos dados": "Anual; incorporação conforme envio dos hospitais",
+            "Período disponível no painel": f"{metadados_rhc['periodo'][0]}–{metadados_rhc['periodo'][1]} (pediatria; exceto SP; último ano parcial)",
+        },
+    ]), hide_index=True)
+    st.caption(
+        "A periodicidade indica a organização temporal dos dados. O painel é atualizado "
+        "quando novos arquivos agregados são gerados e incorporados; não há atualização automática das bases. "
+        "Os valores da aba Custos também utilizam SIA/APAC e SIH/AIH."
+    )
+    st.caption(
+        "Referências: [cronograma CNES/SIA/SIH](https://cnes.datasus.gov.br/pages/acesso-rapido/cronograma.jsp) · "
+        "[atualizações do Integrador RHC](https://irhc.inca.gov.br/RHCNet/visualizaTabNetExterno.action)"
+    )
 provisorios_no_recorte = {ano: situacao for ano, situacao in anos_provisorios.items() if periodo[0] <= ano <= periodo[1]}
 if provisorios_no_recorte:
     descricao = "; ".join(f"{ano}: {situacao}" for ano, situacao in sorted(provisorios_no_recorte.items()))
