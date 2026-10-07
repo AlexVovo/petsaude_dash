@@ -174,7 +174,7 @@ def gerar(saida: Path, cache: Path, coordenadas: Path, inicio: int, fim: int, me
             "periodo": [inicio, fim],
             "ultima_competencia": f"{fim}{mes_final:02d}",
             "unidade_producao": "registros mensais de APAC",
-            "unidade_tempo": "pessoas deduplicadas, com início do tratamento dentro do recorte e datas válidas",
+            "unidade_tempo": "registros de início deduplicados por identificador e modalidade na janela original; autorização APAC como chave substituta quando o identificador está ausente; não pessoas únicas entre modalidades",
             "limite": "Não representa incidência, pessoas únicas em toda a produção nem número de sessões.",
             "distancia": "linha reta entre coordenadas das sedes municipais; não representa trajeto rodoviário",
             "gerado_em_utc": datetime.now(timezone.utc).isoformat(),
@@ -186,7 +186,7 @@ def gerar(saida: Path, cache: Path, coordenadas: Path, inicio: int, fim: int, me
     temporario = saida.with_suffix(saida.suffix + ".tmp")
     temporario.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     temporario.replace(saida)
-    print(f"Criado {saida}: {int(producao.apacs.sum()):,} APACs; {int(tempos.pacientes.sum()):,} pessoas com intervalo válido")
+    print(f"Criado {saida}: {int(producao.apacs.sum()):,} APACs; {int(tempos.pacientes.sum()):,} registros de início por modalidade com intervalo válido")
 
 
 def main() -> None:
