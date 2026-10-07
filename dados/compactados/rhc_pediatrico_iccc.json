@@ -1,0 +1,23 @@
+{
+  "sha256_fonte": "e6406561600dc7559d3bfbc07b929af544c3236618343b306c9be164d7e10ef1",
+  "metadados": {
+    "fonte": "Integrador RHC/INCA — base pública anonimizada do SisRHC",
+    "url": "https://irhc.inca.gov.br/RHCNet/selecionaDownloadTabWin.action?local=todosho&unidFed=",
+    "periodo": [
+      2019,
+      2023
+    ],
+    "cobertura_geografica": "Todos os estados, exceto São Paulo",
+    "faixa_etaria": "0 a 19 anos",
+    "classificacao": "CICI/ICCC-3, atualização IARC 2017, derivada de topografia, morfologia e comportamento CID-O-3",
+    "tabela_conversao": "SEER ICCC-2017.xlsx",
+    "unidade": "caso/tumor registrado no RHC; não equivale a pessoa nem a caso incidente populacional",
+    "total_casos": 37914,
+    "percentual_classificado": 0.9530516431924883,
+    "percentual_com_data_tratamento": 0.8852666561164741,
+    "gerado_em": "2026-09-20T20:50:08"
+  },
+  "tabelas": {
+    "dados": "rhc_pediatrico_iccc_dados.parquet"
+  }
+}

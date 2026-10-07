@@ -4,6 +4,8 @@ Não constitui certificação integral das bases. Foram conferidos os agregados 
 
 ## Ajustes realizados após a conferência
 
+- Após a falha de saúde do Community Cloud (`/healthz: EOF`), a leitura foi otimizada com cópias Parquet validadas coluna por coluna, SHA-256 da fonte e bases compartilhadas somente para leitura. As abas agora executam apenas seu conteúdo aberto. Na medição local de uma inicialização com AppTest, o pico caiu de 1.023.496 KB para 560.848 KB (aproximadamente 45%). Esse resultado não certifica o consumo na hospedagem nem confirma a causa do encerramento remoto. O processo de testes com múltiplos recortes também lê JSONs diretamente para verificar os resultados e não representa uma sessão comum do painel.
+
 - A categoria residual do filtro passou a ser apresentada como “Outros diagnósticos (conforme a base)” e traduzida para o nome usado no SIA/custos. A diferença de escopo está explicada na barra lateral; não se afirma equivalência entre neoplasias malignas e todos os diagnósticos administrativos.
 - O RHC passou a responder à região de residência e ganhou filtro próprio de grupo CICI/ICCC-3. O filtro diagnóstico global foi identificado como exclusivo do SIM/SIA/SIH, evitando uma conversão imprecisa entre CID-10 e ICCC-3.
 - Região e UF passaram a ter nomes neutros, com explicação do território correspondente em cada fonte.

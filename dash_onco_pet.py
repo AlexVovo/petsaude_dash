@@ -1,12 +1,12 @@
 """Painel de oncologia baseado em dados reais agregados do SIM/DATASUS."""
 from __future__ import annotations
 
-import json
 from pathlib import Path
 import pandas as pd
 import plotly.express as px
 import streamlit as st
 from fontes_oficiais import UF_REGIAO
+from dados_compactos import ler_payload
 
 st.set_page_config(page_title="PET-Saúde | Painel de oncologia", page_icon=":material/monitoring:", layout="wide")
 ARQUIVO_SIM = Path(__file__).parent / "dados" / "sim_oncologia_agregado.json"
@@ -21,66 +21,77 @@ MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho",
          "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"]
 
 
-@st.cache_data(show_spinner=False)
+def tabela_compacta(registros: list[dict]) -> pd.DataFrame:
+    """Armazena textos em Arrow, evitando uma string Python por célula."""
+    if isinstance(registros, pd.DataFrame):
+        return registros
+    dados = pd.DataFrame(registros)
+    for coluna in dados.select_dtypes(include="object"):
+        if dados[coluna].map(lambda valor: isinstance(valor, str)).all():
+            dados[coluna] = dados[coluna].astype("string[pyarrow]")
+    return dados
+
+
+# Bases compartilhadas somente para leitura; recortes recebem cópias.
+@st.cache_resource(show_spinner=False, max_entries=1)
 def carregar_sim(caminho: str, modificado_em: float) -> tuple[pd.DataFrame, dict]:
     del modificado_em
-    with Path(caminho).open(encoding="utf-8") as arquivo:
-        payload = json.load(arquivo)
-    dados = pd.DataFrame(payload["dados"])
+    payload = ler_payload(Path(caminho))
+    dados = tabela_compacta(payload["dados"])
     dados[["ano", "mes", "obitos"]] = dados[["ano", "mes", "obitos"]].apply(pd.to_numeric)
     return dados, payload["metadados"]
 
 
-@st.cache_data(show_spinner=False)
+# Bases compartilhadas somente para leitura; recortes recebem cópias.
+@st.cache_resource(show_spinner=False, max_entries=1)
 def carregar_populacao(caminho: str, modificado_em: float) -> tuple[pd.DataFrame, dict]:
     del modificado_em
-    with Path(caminho).open(encoding="utf-8") as arquivo:
-        payload = json.load(arquivo)
-    dados = pd.DataFrame(payload["dados"])
+    payload = ler_payload(Path(caminho))
+    dados = tabela_compacta(payload["dados"])
     dados[["ano", "populacao"]] = dados[["ano", "populacao"]].apply(pd.to_numeric)
     return dados, payload["metadados"]
 
 
-@st.cache_data(show_spinner=False)
+# Bases compartilhadas somente para leitura; recortes recebem cópias.
+@st.cache_resource(show_spinner=False, max_entries=1)
 def carregar_estrutura(caminho: str, modificado_em: float) -> tuple[pd.DataFrame, dict]:
     del modificado_em
-    with Path(caminho).open(encoding="utf-8") as arquivo:
-        payload = json.load(arquivo)
-    return pd.DataFrame(payload["dados"]), payload["metadados"]
+    payload = ler_payload(Path(caminho))
+    return tabela_compacta(payload["dados"]), payload["metadados"]
 
 
-@st.cache_data(show_spinner=False)
+# Bases compartilhadas somente para leitura; recortes recebem cópias.
+@st.cache_resource(show_spinner=False, max_entries=1)
 def carregar_apac(caminho: str, modificado_em: float) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
     del modificado_em
-    with Path(caminho).open(encoding="utf-8") as arquivo:
-        payload = json.load(arquivo)
-    return pd.DataFrame(payload["producao"]), pd.DataFrame(payload["tempo"]), payload["metadados"]
+    payload = ler_payload(Path(caminho))
+    return tabela_compacta(payload["producao"]), tabela_compacta(payload["tempo"]), payload["metadados"]
 
 
-@st.cache_data(show_spinner=False)
+# Bases compartilhadas somente para leitura; recortes recebem cópias.
+@st.cache_resource(show_spinner=False, max_entries=1)
 def carregar_cirurgias(caminho: str, modificado_em: float) -> tuple[pd.DataFrame, dict]:
     del modificado_em
-    with Path(caminho).open(encoding="utf-8") as arquivo:
-        payload = json.load(arquivo)
-    return pd.DataFrame(payload["dados"]), payload["metadados"]
+    payload = ler_payload(Path(caminho))
+    return tabela_compacta(payload["dados"]), payload["metadados"]
 
 
-@st.cache_data(show_spinner=False)
+# Bases compartilhadas somente para leitura; recortes recebem cópias.
+@st.cache_resource(show_spinner=False, max_entries=1)
 def carregar_rhc_pediatrico(caminho: str, modificado_em: float) -> tuple[pd.DataFrame, dict]:
     del modificado_em
-    with Path(caminho).open(encoding="utf-8") as arquivo:
-        payload = json.load(arquivo)
-    dados = pd.DataFrame(payload["dados"])
+    payload = ler_payload(Path(caminho))
+    dados = tabela_compacta(payload["dados"])
     dados[["ano", "casos"]] = dados[["ano", "casos"]].apply(pd.to_numeric)
     return dados, payload["metadados"]
 
 
-@st.cache_data(show_spinner=False)
+# Bases compartilhadas somente para leitura; recortes recebem cópias.
+@st.cache_resource(show_spinner=False, max_entries=1)
 def carregar_custos(caminho: str, modificado_em: float) -> tuple[pd.DataFrame, dict]:
     del modificado_em
-    with Path(caminho).open(encoding="utf-8") as arquivo:
-        payload = json.load(arquivo)
-    dados = pd.DataFrame(payload["dados"])
+    payload = ler_payload(Path(caminho))
+    dados = tabela_compacta(payload["dados"])
     dados[["ano", "mes", "valor"]] = dados[["ano", "mes", "valor"]].apply(pd.to_numeric)
     return dados, payload["metadados"]
 
@@ -325,506 +336,518 @@ if filtro.empty:
     st.warning("Nenhum óbito corresponde aos filtros selecionados.")
 
 abas = st.tabs(["Visão geral", "Custos", "Mortalidade", "Perfil", "Incidência", "Estrutura",
-                "Acesso", "Desfechos", "Pediatria e suporte", "Perguntas e fontes", "Metodologia"])
+                "Acesso", "Desfechos", "Pediatria e suporte", "Perguntas e fontes", "Metodologia"],
+                key="aba_ativa", on_change="rerun")
 
-with abas[0]:
-    serie_anual = filtro.groupby("ano")["obitos"].sum().reset_index()
-    with st.container(horizontal=True):
-        st.metric("Óbitos por câncer", numero(soma(filtro)), border=True, chart_data=serie_anual.obitos.tolist())
-        st.metric("Taxa bruta no período", f"{taxa_periodo:.1f} / 100 mil" if taxa_disponivel else "Indisponível", border=True,
-            help="Soma dos óbitos dividida pela soma das populações anuais compatíveis, multiplicada por 100 mil. Não é média aritmética das taxas anuais.")
-        st.metric("Período", f"{periodo[0]}–{periodo[1]}", border=True)
-        st.metric("Tipo com mais registros", filtro.groupby("tipo_cancer").obitos.sum().idxmax() if not filtro.empty else "Indisponível", border=True)
-        st.metric("UF com mais registros", filtro.groupby("uf").obitos.sum().idxmax() if not filtro.empty else "Indisponível", border=True)
-    st.caption(f"Contagens de óbitos: {periodo[0]}–{periodo[1]}.")
-    if taxa_disponivel:
-        st.caption(f"Taxa bruta: {min(anos_taxa)}–{max(anos_taxa)}, apenas anos não provisórios com denominadores IBGE. Óbitos com sexo, idade ou UF sem denominador compatível são excluídos das taxas e mantidos nas contagens.")
-    esquerda, direita = st.columns([1.5, 1])
-    serie = filtro.groupby(["ano", "tipo_cancer"], observed=True).obitos.sum().reset_index()
-    esquerda.plotly_chart(px.line(serie, x="ano", y="obitos", color="tipo_cancer", markers=True,
-        labels={"ano": "Ano", "obitos": "Óbitos", "tipo_cancer": "Tipo de câncer"},
-        title="Evolução anual dos óbitos", color_discrete_sequence=CORES), key="geral_serie")
-    with direita:
-        barras(filtro, "tipo_cancer", "Óbitos por tipo de câncer", "geral_tipo")
-
-with abas[2]:
-    st.subheader("Mortalidade registrada no SIM")
-    st.caption("Causa básica C00–C97. Taxas calculadas com as Projeções da População do IBGE — Revisão 2024.")
-    medida = st.segmented_control("Medida", ["Taxa por 100 mil", "Contagem"], default="Taxa por 100 mil")
-    periodicidade = st.segmented_control("Periodicidade", ["Ano", "Mês"], default="Ano")
-    if medida == "Taxa por 100 mil" and periodicidade == "Mês":
-        st.info("Taxas mensais não são exibidas: o denominador do IBGE é anual. Mostrando contagens mensais.")
-    mostrar_taxa = medida == "Taxa por 100 mil" and periodicidade == "Ano" and taxa_disponivel
-    if mostrar_taxa:
-        serie = calcular_taxas(obitos_taxa, pop_filtro, ["ano"])
-        tipos_ano = obitos_taxa.groupby(["ano", "tipo_cancer"], observed=True).obitos.sum().reset_index()
-        serie = tipos_ano.merge(serie[["ano", "populacao"]], on="ano", how="inner")
-        serie["taxa_100mil"] = serie.obitos / serie.populacao * 100_000
-        eixo, valor, rotulo = "ano", "taxa_100mil", "Taxa por 100 mil habitantes"
-    elif periodicidade == "Ano":
+if abas[0].open:
+    with abas[0]:
+        serie_anual = filtro.groupby("ano")["obitos"].sum().reset_index()
+        with st.container(horizontal=True):
+            st.metric("Óbitos por câncer", numero(soma(filtro)), border=True, chart_data=serie_anual.obitos.tolist())
+            st.metric("Taxa bruta no período", f"{taxa_periodo:.1f} / 100 mil" if taxa_disponivel else "Indisponível", border=True,
+                help="Soma dos óbitos dividida pela soma das populações anuais compatíveis, multiplicada por 100 mil. Não é média aritmética das taxas anuais.")
+            st.metric("Período", f"{periodo[0]}–{periodo[1]}", border=True)
+            st.metric("Tipo com mais registros", filtro.groupby("tipo_cancer").obitos.sum().idxmax() if not filtro.empty else "Indisponível", border=True)
+            st.metric("UF com mais registros", filtro.groupby("uf").obitos.sum().idxmax() if not filtro.empty else "Indisponível", border=True)
+        st.caption(f"Contagens de óbitos: {periodo[0]}–{periodo[1]}.")
+        if taxa_disponivel:
+            st.caption(f"Taxa bruta: {min(anos_taxa)}–{max(anos_taxa)}, apenas anos não provisórios com denominadores IBGE. Óbitos com sexo, idade ou UF sem denominador compatível são excluídos das taxas e mantidos nas contagens.")
+        esquerda, direita = st.columns([1.5, 1])
         serie = filtro.groupby(["ano", "tipo_cancer"], observed=True).obitos.sum().reset_index()
-        eixo, valor, rotulo = "ano", "obitos", "Óbitos"
-    else:
-        serie = filtro.groupby(["ano", "mes", "tipo_cancer"], observed=True).obitos.sum().reset_index()
-        serie["periodo"] = pd.to_datetime(dict(year=serie.ano, month=serie.mes, day=1))
-        eixo, valor, rotulo = "periodo", "obitos", "Óbitos"
-    st.plotly_chart(px.line(serie, x=eixo, y=valor, color="tipo_cancer", markers=periodicidade == "Ano",
-        labels={eixo: "Período", valor: rotulo, "tipo_cancer": "Tipo de câncer"},
-        color_discrete_sequence=CORES), key="mortalidade_tempo")
-    if mostrar_taxa:
-        territorio = calcular_taxas(obitos_taxa[obitos_taxa.uf != "Ignorada"], pop_filtro, ["uf"])
-        mapa_regiao = sim[["uf", "regiao"]].drop_duplicates()
-        territorio = territorio.merge(mapa_regiao, on="uf", how="left")
-        valor_territorio, titulo_territorio = "taxa_100mil", "Taxa bruta no período por UF"
-    else:
-        territorio = filtro.groupby(["regiao", "uf"], observed=True).obitos.sum().reset_index()
-        valor_territorio, titulo_territorio = "obitos", "Distribuição territorial dos óbitos"
-    st.plotly_chart(px.bar(territorio, x="uf", y=valor_territorio, color="regiao",
-        labels={"uf": "UF de residência", valor_territorio: rotulo, "regiao": "Região"},
-        title=titulo_territorio, color_discrete_sequence=CORES), key="mortalidade_territorio")
-    if periodo[0] < 2000:
-        st.warning("As taxas usam apenas 2000 em diante, limite inicial da Projeção IBGE — Revisão 2024. As contagens mantêm 1996–1999.")
-    if provisorios_no_recorte:
-        st.caption("As séries de contagem incluem 2025/2026 como disponibilizadas pelo SIM; as taxas terminam no último ano consolidado.")
-    st.info("As taxas são brutas. A próxima melhoria metodológica será a padronização por idade para comparações territoriais.")
+        esquerda.plotly_chart(px.line(serie, x="ano", y="obitos", color="tipo_cancer", markers=True,
+            labels={"ano": "Ano", "obitos": "Óbitos", "tipo_cancer": "Tipo de câncer"},
+            title="Evolução anual dos óbitos", color_discrete_sequence=CORES), key="geral_serie")
+        with direita:
+            barras(filtro, "tipo_cancer", "Óbitos por tipo de câncer", "geral_tipo")
 
-with abas[3]:
-    st.subheader("Diferenças por idade, sexo e residência")
-    perfil_medida = st.segmented_control("Exibir perfil como", ["Taxa por 100 mil", "Contagem"], default="Taxa por 100 mil")
-    perfil_taxa = perfil_medida == "Taxa por 100 mil" and taxa_disponivel
-    if perfil_taxa:
-        perfil = calcular_taxas(obitos_taxa, pop_filtro, ["faixa_etaria", "sexo"])
-        valor_perfil, titulo_perfil = "taxa_100mil", "Taxa específica por idade e sexo"
-    else:
-        perfil = filtro.groupby(["faixa_etaria", "sexo"], observed=True).obitos.sum().reset_index()
-        valor_perfil, titulo_perfil = "obitos", "Óbitos por idade e sexo"
-    st.plotly_chart(px.bar(perfil, x="faixa_etaria", y=valor_perfil, color="sexo", barmode="group",
-        labels={"faixa_etaria": "Faixa etária", valor_perfil: "Taxa por 100 mil" if perfil_taxa else "Óbitos", "sexo": "Sexo"},
-        title=titulo_perfil, color_discrete_sequence=CORES), key="perfil_idade_sexo")
-    comparar = st.selectbox("Comparar tipos de câncer por", ["faixa_etaria", "sexo", "regiao", "uf"])
-    if perfil_taxa:
-        pop_cruzamento = pop_filtro.copy()
-        if comparar == "regiao":
-            pop_cruzamento = pop_cruzamento.merge(sim[["uf", "regiao"]].drop_duplicates(), on="uf", how="left")
-        denominador = pop_cruzamento.groupby(comparar, observed=True).populacao.sum().reset_index()
-        cruzamento = obitos_taxa.groupby([comparar, "tipo_cancer"], observed=True).obitos.sum().reset_index()
-        cruzamento = cruzamento.merge(denominador, on=comparar, how="inner")
-        cruzamento["taxa_100mil"] = cruzamento.obitos / cruzamento.populacao * 100_000
-        valor_cruzamento = "taxa_100mil"
-    else:
-        cruzamento = filtro.groupby([comparar, "tipo_cancer"], observed=True).obitos.sum().reset_index()
-        valor_cruzamento = "obitos"
-    st.plotly_chart(px.bar(cruzamento, x=comparar, y=valor_cruzamento, color="tipo_cancer", barmode="group",
-        labels={comparar: comparar.replace("_", " ").title(), valor_cruzamento: "Taxa por 100 mil" if perfil_taxa else "Óbitos", "tipo_cancer": "Tipo de câncer"},
-        color_discrete_sequence=CORES), key="perfil_comparacao")
-    st.subheader("Hierarquia territorial dos óbitos")
-    st.caption("Clique em uma região ou UF para aprofundar; clique no centro para retornar ao nível anterior.")
-    hierarquia_territorial = filtro[
-        ~filtro.regiao.isin(["Ignorada", ""]) & ~filtro.uf.isin(["Ignorada", ""])
-    ].groupby(["regiao", "uf", "tipo_cancer"], observed=True).obitos.sum().reset_index()
-    if not hierarquia_territorial.empty:
-        figura_territorial = px.sunburst(
-            hierarquia_territorial, path=["regiao", "uf", "tipo_cancer"], values="obitos",
-            color="regiao", color_discrete_sequence=CORES,
-            labels={"regiao": "Região", "uf": "UF", "tipo_cancer": "Tipo de câncer", "obitos": "Óbitos"},
-            title="Região → UF → tipo de câncer",
-        )
-        figura_territorial.update_traces(hovertemplate="<b>%{label}</b><br>Óbitos: %{value:,.0f}<br>Participação no nível: %{percentParent:.1%}<extra></extra>")
-        st.plotly_chart(figura_territorial, key="perfil_hierarquia_territorial")
-
-with abas[4]:
-    st.subheader("Incidência do câncer")
-    pendencia("Incidência por tipo, tempo e perfil", "O SIM registra mortes, não casos novos. Não é válido "
-              "usar óbitos como incidência. A pergunta exige casos novos, território coberto e população do mesmo período.",
-              "RCBP/INCA + população IBGE")
-
-with abas[5]:
-    st.subheader("Estrutura assistencial")
-    competencia = metadados_estrutura["competencia"]
-    st.caption(f"Habilitações ativas no CNES — competência {competencia[4:6]}/{competencia[:4]}. Os filtros de região e UF da barra lateral também se aplicam aqui.")
-    if estrutura_filtro.empty:
-        st.warning("Nenhum estabelecimento corresponde ao recorte territorial.")
-    else:
-        with st.container(horizontal=True):
-            st.metric("Estabelecimentos habilitados", numero(len(estrutura_filtro)), border=True)
-            st.metric("CACON ou UNACON", numero(estrutura_filtro.cacon_unacon.sum()), border=True)
-            st.metric("Com radioterapia", numero(estrutura_filtro.radioterapia.sum()), border=True)
-            st.metric("Com oncologia pediátrica", numero(estrutura_filtro.pediatria.sum()), border=True)
-        esquerda, direita = st.columns(2)
-        por_uf = estrutura_filtro.groupby(["regiao", "uf"], observed=True).size().reset_index(name="estabelecimentos")
-        esquerda.plotly_chart(px.bar(por_uf, x="uf", y="estabelecimentos", color="regiao",
-            labels={"uf": "UF", "estabelecimentos": "Estabelecimentos", "regiao": "Região"},
-            title="Estabelecimentos por UF", color_discrete_sequence=CORES), key="estrutura_uf")
-        por_tipo = estrutura_filtro.groupby("tipo_principal", observed=True).size().sort_values().reset_index(name="estabelecimentos")
-        direita.plotly_chart(px.bar(por_tipo, x="estabelecimentos", y="tipo_principal", orientation="h",
-            labels={"estabelecimentos": "Estabelecimentos", "tipo_principal": ""},
-            title="Habilitação principal", color="estabelecimentos", color_continuous_scale="Greens"), key="estrutura_tipo")
-        por_natureza = estrutura_filtro.groupby("natureza_juridica", observed=True).size().reset_index(name="estabelecimentos")
-        st.plotly_chart(px.bar(por_natureza, x="natureza_juridica", y="estabelecimentos", color="natureza_juridica",
-            labels={"natureza_juridica": "Natureza jurídica", "estabelecimentos": "Estabelecimentos"},
-            title="Distribuição por natureza jurídica", color_discrete_sequence=CORES), key="estrutura_natureza")
-        busca = st.text_input("Buscar estabelecimento, município ou CNES", key="busca_estrutura")
-        tabela = estrutura_filtro.copy()
-        if busca:
-            alvo = (tabela.estabelecimento + " " + tabela.municipio + " " + tabela.cnes).str.contains(busca, case=False, na=False)
-            tabela = tabela[alvo]
-        exibicao = tabela[["cnes", "estabelecimento", "municipio", "uf", "tipo_principal", "gestao", "natureza_juridica"]].rename(columns={
-            "cnes": "CNES", "estabelecimento": "Estabelecimento", "municipio": "Município", "uf": "UF",
-            "tipo_principal": "Habilitação principal", "gestao": "Gestão", "natureza_juridica": "Natureza jurídica",
-        })
-        st.dataframe(exibicao, hide_index=True)
-        st.download_button("Baixar estrutura filtrada (CSV)", exibicao.to_csv(index=False).encode("utf-8-sig"),
-                           "estrutura_oncologica_cnes.csv", "text/csv", icon=":material/download:")
-    pendencia("Uso ou ocupação", "Exige produção e um denominador validado de capacidade.", "CNES + SIA/SIH + capacidade")
-
-with abas[6]:
-    st.subheader("Acesso ao diagnóstico e tratamento")
-    competencia_apac = metadados_apac["ultima_competencia"]
-    st.caption(f"SIA/APAC de 01/2025 a {competencia_apac[4:6]}/{competencia_apac[:4]}. Território corresponde ao local de atendimento.")
-    st.caption("Os totais de 2026 são parciais; compare os mesmos meses ao analisar a evolução anual.")
-    if apac_filtro.empty:
-        st.warning("Não há APACs no recorte selecionado. A base disponível começa em 2025.")
-    else:
-        total_apacs = int(apac_filtro.apacs.sum())
-        quimio = int(apac_filtro.loc[apac_filtro.modalidade == "Quimioterapia", "apacs"].sum())
-        radio = int(apac_filtro.loc[apac_filtro.modalidade == "Radioterapia", "apacs"].sum())
-        total_tempos = int(tempo_apac_filtro.pacientes.sum())
-        ate_60 = int(tempo_apac_filtro.loc[tempo_apac_filtro.faixa_tempo.isin(["Até 30 dias", "31–60 dias"]), "pacientes"].sum())
-        with st.container(horizontal=True):
-            st.metric("Registros mensais de APAC", numero(total_apacs), border=True)
-            st.metric("Quimioterapia", numero(quimio), border=True)
-            st.metric("Radioterapia", numero(radio), border=True)
-            st.metric("Inícios em até 60 dias (por modalidade)", f"{ate_60 / total_tempos:.1%}" if total_tempos else "Indisponível", border=True)
-            st.metric("Registros de início por modalidade", numero(total_tempos), border=True)
-        serie_apac = apac_filtro.groupby(["ano", "mes", "modalidade"], observed=True).apacs.sum().reset_index()
-        serie_apac["competencia"] = pd.to_datetime(dict(year=serie_apac.ano, month=serie_apac.mes, day=1))
-        st.plotly_chart(px.line(serie_apac, x="competencia", y="apacs", color="modalidade", markers=True,
-            labels={"competencia": "Competência", "apacs": "Registros mensais de APAC", "modalidade": "Modalidade"},
-            title="Produção ambulatorial oncológica", color_discrete_sequence=CORES), key="acesso_serie_apac")
-        esquerda, direita = st.columns(2)
-        espera = tempo_apac_filtro.groupby(["faixa_tempo", "modalidade"], observed=True).pacientes.sum().reset_index()
-        esquerda.plotly_chart(px.bar(espera, x="faixa_tempo", y="pacientes", color="modalidade", barmode="group",
-            labels={"faixa_tempo": "Intervalo", "pacientes": "Registros de início por modalidade", "modalidade": "Modalidade"},
-            title="Intervalo entre diagnóstico e tratamento", color_discrete_sequence=CORES), key="acesso_tempo")
-        territorio_apac = apac_filtro.groupby(["regiao_atendimento", "uf_atendimento", "modalidade"], observed=True).apacs.sum().reset_index()
-        direita.plotly_chart(px.bar(territorio_apac, x="uf_atendimento", y="apacs", color="modalidade", barmode="group",
-            labels={"uf_atendimento": "UF do atendimento", "apacs": "Registros mensais de APAC", "modalidade": "Modalidade"},
-            title="Produção por UF de atendimento", color_discrete_sequence=CORES), key="acesso_uf")
-        por_cancer_apac = apac_filtro.groupby(["tipo_cancer", "modalidade"], observed=True).apacs.sum().reset_index()
-        st.dataframe(por_cancer_apac.rename(columns={"tipo_cancer": "Tipo de câncer", "modalidade": "Modalidade", "apacs": "Registros de APAC"}), hide_index=True)
-        st.info("A produção conta registros mensais de APAC. O indicador de tempo deduplica por identificador e modalidade na janela original de processamento; na ausência de identificador, usa a autorização APAC. Uma pessoa pode contribuir uma vez em quimioterapia e outra em radioterapia. O percentual usa registros com intervalo válido, não pessoas únicas entre modalidades. O filtro anual seleciona a competência do registro, e os inícios foram restringidos à janela original da base.")
-    st.divider()
-    st.subheader("Cirurgias oncológicas e deslocamento")
-    if cirurgias_filtro.empty:
-        st.warning("Não há cirurgias do SIH no recorte selecionado. A base disponível começa em 2025.")
-    else:
-        total_cirurgias = int(cirurgias_filtro.internacoes.sum())
-        fora_cirurgia = int(cirurgias_filtro.loc[cirurgias_filtro.fora_municipio, "internacoes"].sum())
-        dist_validas_cirurgia = int(cirurgias_filtro.distancias_validas.sum())
-        distancia_media_cirurgia = cirurgias_filtro.soma_distancia_km.sum() / dist_validas_cirurgia if dist_validas_cirurgia else None
-        total_apac_dist = int(apac_filtro.apacs.sum()) if not apac_filtro.empty else 0
-        fora_apac = int(apac_filtro.loc[apac_filtro.fora_municipio, "apacs"].sum()) if total_apac_dist else 0
-        dist_validas_apac = int(apac_filtro.distancias_validas.sum()) if total_apac_dist else 0
-        distancia_media_apac = apac_filtro.soma_distancia_km.sum() / dist_validas_apac if dist_validas_apac else None
-        with st.container(horizontal=True):
-            st.metric("Internações com cirurgia oncológica", numero(total_cirurgias), border=True)
-            st.metric("Cirurgias fora do município", f"{fora_cirurgia / total_cirurgias:.1%}", border=True)
-            st.metric("Distância média — cirurgia", f"{distancia_media_cirurgia:.1f} km" if distancia_media_cirurgia is not None else "Indisponível", border=True)
-            st.metric("APACs fora do município", f"{fora_apac / total_apac_dist:.1%}" if total_apac_dist else "Indisponível", border=True)
-            st.metric("Distância média — APAC", f"{distancia_media_apac:.1f} km" if distancia_media_apac is not None else "Indisponível", border=True)
-        serie_cirurgia = cirurgias_filtro.groupby(["ano", "mes"], observed=True).internacoes.sum().reset_index()
-        serie_cirurgia["competencia"] = pd.to_datetime(dict(year=serie_cirurgia.ano, month=serie_cirurgia.mes, day=1))
-        st.plotly_chart(px.line(serie_cirurgia, x="competencia", y="internacoes", markers=True,
-            labels={"competencia": "Competência", "internacoes": "Internações"}, title="Cirurgias oncológicas no SIH"), key="acesso_cirurgias")
-        col_dist1, col_dist2 = st.columns(2)
-        dist_cirurgia = cirurgias_filtro.groupby("faixa_distancia", observed=True).internacoes.sum().reset_index()
-        col_dist1.plotly_chart(px.bar(dist_cirurgia, x="faixa_distancia", y="internacoes",
-            labels={"faixa_distancia": "Distância estimada", "internacoes": "Internações"},
-            title="Deslocamento para cirurgia", color="internacoes", color_continuous_scale="Greens"), key="dist_cirurgia")
-        dist_apac = apac_filtro.groupby(["faixa_distancia", "modalidade"], observed=True).apacs.sum().reset_index() if not apac_filtro.empty else pd.DataFrame()
-        if not dist_apac.empty:
-            col_dist2.plotly_chart(px.bar(dist_apac, x="faixa_distancia", y="apacs", color="modalidade", barmode="group",
-                labels={"faixa_distancia": "Distância estimada", "apacs": "Registros de APAC", "modalidade": "Modalidade"},
-                title="Deslocamento para quimio/radioterapia", color_discrete_sequence=CORES), key="dist_apac")
-        st.info("Distância em linha reta entre as coordenadas das sedes dos municípios de residência e atendimento. Não representa endereço do paciente nem trajeto rodoviário.")
-    pendencia("Diagnosticados versus tratados", "Exige identificação de caso e início do tratamento.", "Painel Oncológico/RHC")
-    pendencia("Fila APS → regulador → prestador", "Exige timestamps dos eventos locais de regulação.", "Regulador municipal")
-
-with abas[7]:
-    st.subheader("Desfechos")
-    st.success("Disponível: óbitos por tipo de câncer, período, idade, sexo e residência.")
-    pendencia("Cura, recorrência e resposta", "Esses eventos não são registrados no SIM.", "RHC/prontuário")
-    pendencia("Sobrevida global e livre de doença", "Exige coorte, data inicial, seguimento, óbito vinculado e censura.", "RHC/prontuário + SIM")
-    pendencia("Tratamento e desfecho", "A análise precisa controlar estágio, gravidade e seleção do paciente.", "Base clínica longitudinal")
-
-with abas[8]:
-    st.subheader("Câncer pediátrico")
-    ped = filtro[filtro.segmento == "Pediátrico"]
-    with st.container(horizontal=True):
-        st.metric("Óbitos de 0 a 19 anos", numero(soma(ped)), border=True)
-        st.metric("Participação nos óbitos filtrados", f"{soma(ped) / soma(filtro):.1%}" if soma(filtro) else "Indisponível", border=True)
-    if not ped.empty:
-        barras(ped, "tipo_cancer", "Mortalidade pediátrica por grupo derivado da CID-10", "ped_tipo")
-    st.divider()
-    st.subheader("Casos hospitalares por CICI/ICCC-3")
-    st.caption("Integrador RHC/INCA, 2019–2023. Classificação derivada de topografia, morfologia e comportamento CID-O-3.")
-    st.caption("Recorte diagnóstico: filtro próprio Grupo CICI/ICCC-3 (RHC). Região e UF correspondem à residência; o filtro de tipo do SIM/SIA/SIH não se aplica a esta classificação.")
-    st.warning("A base pública usada exclui São Paulo e 2023 está parcial. RHC descreve casos atendidos pelos hospitais participantes e não mede incidência populacional.")
-    if rhc_ped_filtro.empty:
-        st.info("Não há casos do RHC pediátrico no período ou recorte territorial selecionado.")
-    else:
-        total_rhc = int(rhc_ped_filtro.casos.sum())
-        classificados = int(rhc_ped_filtro.loc[rhc_ped_filtro.recode_iccc != "999", "casos"].sum())
-        com_tratamento = int(rhc_ped_filtro.loc[rhc_ped_filtro.tratamento_com_data, "casos"].sum())
-        tempos_validos = rhc_ped_filtro[~rhc_ped_filtro.faixa_tempo.isin([
-            "Sem intervalo calculável", "Tratamento anterior ao diagnóstico informado"
-        ])]
-        total_tempo = int(tempos_validos.casos.sum())
-        ate_60 = int(tempos_validos.loc[tempos_validos.faixa_tempo.isin(["Até 30 dias", "31–60 dias"]), "casos"].sum())
-        with st.container(horizontal=True):
-            st.metric("Casos registrados no RHC", numero(total_rhc), border=True)
-            st.metric("Classificados na ICCC-3", f"{classificados / total_rhc:.1%}", border=True)
-            st.metric("Com data de tratamento", f"{com_tratamento / total_rhc:.1%}", border=True)
-            st.metric("Tratamento em até 60 dias", f"{ate_60 / total_tempo:.1%}" if total_tempo else "Indisponível", border=True)
-        grupos_rhc = rhc_ped_filtro.groupby("grupo_iccc", observed=True).casos.sum().sort_values().reset_index()
-        st.plotly_chart(px.bar(grupos_rhc, x="casos", y="grupo_iccc", orientation="h", color="casos",
-            labels={"casos": "Casos registrados", "grupo_iccc": ""}, title="Casos por grupo CICI/ICCC-3",
-            color_continuous_scale="Greens"), key="ped_iccc_grupos")
-        st.subheader("Hierarquia diagnóstica")
-        st.caption("O tamanho de cada retângulo representa o número de casos. Clique em um grupo para abrir seus subgrupos.")
-        hierarquia_iccc = rhc_ped_filtro.groupby(
-            ["grupo_iccc", "subgrupo_iccc"], observed=True
-        ).casos.sum().reset_index()
-        hierarquia_iccc["classificacao"] = "CICI/ICCC-3"
-        figura_iccc = px.treemap(
-            hierarquia_iccc, path=["classificacao", "grupo_iccc", "subgrupo_iccc"], values="casos",
-            color="grupo_iccc", color_discrete_sequence=CORES,
-            labels={"classificacao": "Classificação", "grupo_iccc": "Grupo", "subgrupo_iccc": "Subgrupo", "casos": "Casos"},
-            title="CICI/ICCC-3: grupos → subgrupos",
-        )
-        figura_iccc.update_traces(hovertemplate="<b>%{label}</b><br>Casos: %{value:,.0f}<br>Participação no nível: %{percentParent:.1%}<extra></extra>")
-        st.plotly_chart(figura_iccc, key="ped_iccc_hierarquia")
-        grupos_classificados = rhc_ped_filtro.loc[rhc_ped_filtro.recode_iccc != "999"].groupby(
-            "grupo_iccc", observed=True).casos.sum().sort_values(ascending=False)
-        if not grupos_classificados.empty:
-            grupo_detalhado = st.selectbox("Grupo CICI/ICCC-3 para detalhar", grupos_classificados.index.tolist())
-            subgrupos_rhc = rhc_ped_filtro[
-                rhc_ped_filtro.grupo_iccc == grupo_detalhado
-            ].groupby("subgrupo_iccc", observed=True).casos.sum().sort_values().reset_index()
-            st.plotly_chart(px.bar(subgrupos_rhc, x="casos", y="subgrupo_iccc", orientation="h", color="casos",
-                labels={"casos": "Casos registrados", "subgrupo_iccc": ""},
-                title=f"Subgrupos de {grupo_detalhado}", color_continuous_scale="Greens"), key="ped_iccc_subgrupos")
-        esquerda_rhc, direita_rhc = st.columns(2)
-        serie_rhc = rhc_ped_filtro.groupby("ano", observed=True).casos.sum().reset_index()
-        esquerda_rhc.plotly_chart(px.line(serie_rhc, x="ano", y="casos", markers=True,
-            labels={"ano": "Ano da primeira consulta", "casos": "Casos registrados"},
-            title="Casos pediátricos registrados por ano"), key="ped_iccc_serie")
-        tempos_rhc = rhc_ped_filtro.groupby("faixa_tempo", observed=True).casos.sum().reset_index()
-        direita_rhc.plotly_chart(px.bar(tempos_rhc, x="faixa_tempo", y="casos", color="casos",
-            labels={"faixa_tempo": "Intervalo registrado", "casos": "Casos"},
-            title="Intervalo entre diagnóstico e início do tratamento", color_continuous_scale="Greens"), key="ped_iccc_tempo")
-        st.info("O indicador de tratamento usa a presença de data de início no RHC. Casos sem data e datas anteriores ao diagnóstico informado não entram no percentual de até 60 dias.")
-        st.subheader("Primeiro tratamento no hospital")
-        tratamentos_rhc = rhc_ped_filtro.groupby("primeiro_tratamento", observed=True).casos.sum().sort_values().reset_index()
-        st.plotly_chart(px.bar(tratamentos_rhc, x="casos", y="primeiro_tratamento", orientation="h", color="casos",
-            labels={"casos": "Casos registrados", "primeiro_tratamento": ""},
-            title="Modalidade ou combinação registrada como primeiro tratamento", color_continuous_scale="Greens"),
-            key="ped_iccc_tratamento")
-        sem_tratamento = rhc_ped_filtro[rhc_ped_filtro.primeiro_tratamento == "Nenhum tratamento no hospital"]
-        if not sem_tratamento.empty:
-            razoes_rhc = sem_tratamento.groupby("razao_nao_tratamento", observed=True).casos.sum().sort_values().reset_index()
-            st.plotly_chart(px.bar(razoes_rhc, x="casos", y="razao_nao_tratamento", orientation="h", color="casos",
-                labels={"casos": "Casos", "razao_nao_tratamento": ""},
-                title="Razão registrada para ausência de tratamento no hospital", color_continuous_scale="Greens"),
-                key="ped_iccc_razao")
-        with st.expander("Qualidade e completude dos registros"):
-            sem_classificacao = total_rhc - classificados
-            sem_data = int(rhc_ped_filtro.loc[rhc_ped_filtro.faixa_tempo == "Sem intervalo calculável", "casos"].sum())
-            data_inconsistente = int(rhc_ped_filtro.loc[
-                rhc_ped_filtro.faixa_tempo == "Tratamento anterior ao diagnóstico informado", "casos"].sum())
-            uf_ignorada = int(rhc_ped_filtro.loc[
-                rhc_ped_filtro.uf_residencia.isin(["", "Ignorada", "99"]), "casos"].sum())
-            tratamento_ignorado = int(rhc_ped_filtro.loc[
-                rhc_ped_filtro.primeiro_tratamento == "Sem informação", "casos"].sum())
-            qualidade_rhc = pd.DataFrame([
-                ["Sem classificação ICCC-3", sem_classificacao, sem_classificacao / total_rhc],
-                ["Sem intervalo diagnóstico–tratamento calculável", sem_data, sem_data / total_rhc],
-                ["Data de tratamento anterior ao diagnóstico informado", data_inconsistente, data_inconsistente / total_rhc],
-                ["UF de residência ignorada", uf_ignorada, uf_ignorada / total_rhc],
-                ["Primeiro tratamento sem informação", tratamento_ignorado, tratamento_ignorado / total_rhc],
-            ], columns=["Indicador", "Casos", "Percentual"])
-            st.dataframe(qualidade_rhc, hide_index=True, column_config={
-                "Percentual": st.column_config.NumberColumn("Percentual", format="percent")
-            })
-    pendencia("Casas de apoio", "Exige cadastro georreferenciado e vínculo com centros pediátricos.", "Cadastro local + CNES")
-    pendencia("Qualidade de vida, escola e doenças secundárias", "Não são inferíveis de registros de mortalidade.", "Prontuário + pesquisa primária")
-
-with abas[1]:
-    st.subheader("Custos SIA/SIH")
-    st.caption("Valores administrativos da atenção ambulatorial e hospitalar em oncologia, conforme os filtros do painel.")
-    st.link_button(
-        "Fonte: DATASUS",
-        "https://ftp.datasus.gov.br/dissemin/publicos/",
-        icon=":material/database:",
-    )
-
-    ultima_competencia_custos = str(metadados_custos["ultima_competencia"])
-    ultimo_ano_custos = int(ultima_competencia_custos[:4])
-    ultimo_mes_custos = int(ultima_competencia_custos[4:])
-    if ultimo_mes_custos < 12 and periodo[0] <= ultimo_ano_custos <= periodo[1]:
-        st.warning(
-            f"Base em atualização: {ultimo_ano_custos} possui dados processados até "
-            f"{MESES[ultimo_mes_custos - 1]}. "
-            "Totais do ano podem estar incompletos."
-        )
-
-    if custos_filtro.empty:
-        st.info("Não há valores SIA/SIH para os filtros e o período selecionados.")
-    else:
-        total_custos = float(custos_filtro.valor.sum())
-        total_sia = float(custos_filtro.loc[custos_filtro.sistema == "SIA", "valor"].sum())
-        total_sih = float(custos_filtro.loc[custos_filtro.sistema == "SIH", "valor"].sum())
-        serie_mensal_custos = (
-            custos_filtro.groupby(["ano", "mes"], observed=True).valor.sum().reset_index()
-        )
-        serie_mensal_custos["competencia"] = pd.to_datetime(dict(
-            year=serie_mensal_custos.ano, month=serie_mensal_custos.mes, day=1
-        ))
-
-        with st.container(horizontal=True):
-            st.metric(
-                "Custo total em oncologia",
-                moeda_compacta(total_custos),
-                help="Soma dos valores aprovados no SIA e registrados nas AIH.",
-                border=True,
-                chart_data=serie_mensal_custos.valor.tolist(),
-                chart_type="bar",
-            )
-            st.metric(
-                "Custos SIA",
-                moeda_compacta(total_sia),
-                help="Valor aprovado da produção ambulatorial (AP_VL_AP).",
-                border=True,
-            )
-            st.metric(
-                "Custos SIH",
-                moeda_compacta(total_sih),
-                help="Valor total registrado nas AIH (VAL_TOT).",
-                border=True,
-            )
-
-        periodicidade_custos = st.segmented_control(
-            "Evolução dos valores",
-            ["Mensal", "Anual"],
-            default="Mensal",
-            key="custos_periodicidade",
-        )
-        if periodicidade_custos == "Mensal":
-            serie_custos = serie_mensal_custos
-            eixo_custos = "competencia"
+if abas[2].open:
+    with abas[2]:
+        st.subheader("Mortalidade registrada no SIM")
+        st.caption("Causa básica C00–C97. Taxas calculadas com as Projeções da População do IBGE — Revisão 2024.")
+        medida = st.segmented_control("Medida", ["Taxa por 100 mil", "Contagem"], default="Taxa por 100 mil")
+        periodicidade = st.segmented_control("Periodicidade", ["Ano", "Mês"], default="Ano")
+        if medida == "Taxa por 100 mil" and periodicidade == "Mês":
+            st.info("Taxas mensais não são exibidas: o denominador do IBGE é anual. Mostrando contagens mensais.")
+        mostrar_taxa = medida == "Taxa por 100 mil" and periodicidade == "Ano" and taxa_disponivel
+        if mostrar_taxa:
+            serie = calcular_taxas(obitos_taxa, pop_filtro, ["ano"])
+            tipos_ano = obitos_taxa.groupby(["ano", "tipo_cancer"], observed=True).obitos.sum().reset_index()
+            serie = tipos_ano.merge(serie[["ano", "populacao"]], on="ano", how="inner")
+            serie["taxa_100mil"] = serie.obitos / serie.populacao * 100_000
+            eixo, valor, rotulo = "ano", "taxa_100mil", "Taxa por 100 mil habitantes"
+        elif periodicidade == "Ano":
+            serie = filtro.groupby(["ano", "tipo_cancer"], observed=True).obitos.sum().reset_index()
+            eixo, valor, rotulo = "ano", "obitos", "Óbitos"
         else:
-            serie_custos = custos_filtro.groupby("ano", observed=True).valor.sum().reset_index()
-            eixo_custos = "ano"
-        st.plotly_chart(px.bar(
-            serie_custos,
-            x=eixo_custos,
-            y="valor",
-            labels={eixo_custos: "Competência" if periodicidade_custos == "Mensal" else "Ano", "valor": "Valor (R$)"},
-            title="Evolução dos valores administrativos",
-            color_discrete_sequence=["#0f766e"],
-        ), key="custos_evolucao")
+            serie = filtro.groupby(["ano", "mes", "tipo_cancer"], observed=True).obitos.sum().reset_index()
+            serie["periodo"] = pd.to_datetime(dict(year=serie.ano, month=serie.mes, day=1))
+            eixo, valor, rotulo = "periodo", "obitos", "Óbitos"
+        st.plotly_chart(px.line(serie, x=eixo, y=valor, color="tipo_cancer", markers=periodicidade == "Ano",
+            labels={eixo: "Período", valor: rotulo, "tipo_cancer": "Tipo de câncer"},
+            color_discrete_sequence=CORES), key="mortalidade_tempo")
+        if mostrar_taxa:
+            territorio = calcular_taxas(obitos_taxa[obitos_taxa.uf != "Ignorada"], pop_filtro, ["uf"])
+            mapa_regiao = sim[["uf", "regiao"]].drop_duplicates()
+            territorio = territorio.merge(mapa_regiao, on="uf", how="left")
+            valor_territorio, titulo_territorio = "taxa_100mil", "Taxa bruta no período por UF"
+        else:
+            territorio = filtro.groupby(["regiao", "uf"], observed=True).obitos.sum().reset_index()
+            valor_territorio, titulo_territorio = "obitos", "Distribuição territorial dos óbitos"
+        st.plotly_chart(px.bar(territorio, x="uf", y=valor_territorio, color="regiao",
+            labels={"uf": "UF de residência", valor_territorio: rotulo, "regiao": "Região"},
+            title=titulo_territorio, color_discrete_sequence=CORES), key="mortalidade_territorio")
+        if periodo[0] < 2000:
+            st.warning("As taxas usam apenas 2000 em diante, limite inicial da Projeção IBGE — Revisão 2024. As contagens mantêm 1996–1999.")
+        if provisorios_no_recorte:
+            st.caption("As séries de contagem incluem 2025/2026 como disponibilizadas pelo SIM; as taxas terminam no último ano consolidado.")
+        st.info("As taxas são brutas. A próxima melhoria metodológica será a padronização por idade para comparações territoriais.")
 
-        esquerda_custos, direita_custos = st.columns(2)
-        por_modalidade = custos_filtro.groupby(["modalidade", "sistema"], observed=True).valor.sum().reset_index()
-        esquerda_custos.plotly_chart(px.bar(
-            por_modalidade,
-            x="modalidade",
-            y="valor",
-            color="sistema",
-            labels={"modalidade": "Modalidade", "valor": "Valor (R$)", "sistema": "Sistema"},
-            title="Composição por modalidade",
-            color_discrete_sequence=["#46639b", "#b85d2d"],
-        ), key="custos_modalidade")
-        por_territorio = (
-            custos_filtro.groupby(["uf_atendimento", "regiao_atendimento"], observed=True).valor.sum()
-            .sort_values(ascending=False).head(15).reset_index()
+if abas[3].open:
+    with abas[3]:
+        st.subheader("Diferenças por idade, sexo e residência")
+        perfil_medida = st.segmented_control("Exibir perfil como", ["Taxa por 100 mil", "Contagem"], default="Taxa por 100 mil")
+        perfil_taxa = perfil_medida == "Taxa por 100 mil" and taxa_disponivel
+        if perfil_taxa:
+            perfil = calcular_taxas(obitos_taxa, pop_filtro, ["faixa_etaria", "sexo"])
+            valor_perfil, titulo_perfil = "taxa_100mil", "Taxa específica por idade e sexo"
+        else:
+            perfil = filtro.groupby(["faixa_etaria", "sexo"], observed=True).obitos.sum().reset_index()
+            valor_perfil, titulo_perfil = "obitos", "Óbitos por idade e sexo"
+        st.plotly_chart(px.bar(perfil, x="faixa_etaria", y=valor_perfil, color="sexo", barmode="group",
+            labels={"faixa_etaria": "Faixa etária", valor_perfil: "Taxa por 100 mil" if perfil_taxa else "Óbitos", "sexo": "Sexo"},
+            title=titulo_perfil, color_discrete_sequence=CORES), key="perfil_idade_sexo")
+        comparar = st.selectbox("Comparar tipos de câncer por", ["faixa_etaria", "sexo", "regiao", "uf"])
+        if perfil_taxa:
+            pop_cruzamento = pop_filtro.copy()
+            if comparar == "regiao":
+                pop_cruzamento = pop_cruzamento.merge(sim[["uf", "regiao"]].drop_duplicates(), on="uf", how="left")
+            denominador = pop_cruzamento.groupby(comparar, observed=True).populacao.sum().reset_index()
+            cruzamento = obitos_taxa.groupby([comparar, "tipo_cancer"], observed=True).obitos.sum().reset_index()
+            cruzamento = cruzamento.merge(denominador, on=comparar, how="inner")
+            cruzamento["taxa_100mil"] = cruzamento.obitos / cruzamento.populacao * 100_000
+            valor_cruzamento = "taxa_100mil"
+        else:
+            cruzamento = filtro.groupby([comparar, "tipo_cancer"], observed=True).obitos.sum().reset_index()
+            valor_cruzamento = "obitos"
+        st.plotly_chart(px.bar(cruzamento, x=comparar, y=valor_cruzamento, color="tipo_cancer", barmode="group",
+            labels={comparar: comparar.replace("_", " ").title(), valor_cruzamento: "Taxa por 100 mil" if perfil_taxa else "Óbitos", "tipo_cancer": "Tipo de câncer"},
+            color_discrete_sequence=CORES), key="perfil_comparacao")
+        st.subheader("Hierarquia territorial dos óbitos")
+        st.caption("Clique em uma região ou UF para aprofundar; clique no centro para retornar ao nível anterior.")
+        hierarquia_territorial = filtro[
+            ~filtro.regiao.isin(["Ignorada", ""]) & ~filtro.uf.isin(["Ignorada", ""])
+        ].groupby(["regiao", "uf", "tipo_cancer"], observed=True).obitos.sum().reset_index()
+        if not hierarquia_territorial.empty:
+            figura_territorial = px.sunburst(
+                hierarquia_territorial, path=["regiao", "uf", "tipo_cancer"], values="obitos",
+                color="regiao", color_discrete_sequence=CORES,
+                labels={"regiao": "Região", "uf": "UF", "tipo_cancer": "Tipo de câncer", "obitos": "Óbitos"},
+                title="Região → UF → tipo de câncer",
+            )
+            figura_territorial.update_traces(hovertemplate="<b>%{label}</b><br>Óbitos: %{value:,.0f}<br>Participação no nível: %{percentParent:.1%}<extra></extra>")
+            st.plotly_chart(figura_territorial, key="perfil_hierarquia_territorial")
+
+if abas[4].open:
+    with abas[4]:
+        st.subheader("Incidência do câncer")
+        pendencia("Incidência por tipo, tempo e perfil", "O SIM registra mortes, não casos novos. Não é válido "
+                  "usar óbitos como incidência. A pergunta exige casos novos, território coberto e população do mesmo período.",
+                  "RCBP/INCA + população IBGE")
+
+if abas[5].open:
+    with abas[5]:
+        st.subheader("Estrutura assistencial")
+        competencia = metadados_estrutura["competencia"]
+        st.caption(f"Habilitações ativas no CNES — competência {competencia[4:6]}/{competencia[:4]}. Os filtros de região e UF da barra lateral também se aplicam aqui.")
+        if estrutura_filtro.empty:
+            st.warning("Nenhum estabelecimento corresponde ao recorte territorial.")
+        else:
+            with st.container(horizontal=True):
+                st.metric("Estabelecimentos habilitados", numero(len(estrutura_filtro)), border=True)
+                st.metric("CACON ou UNACON", numero(estrutura_filtro.cacon_unacon.sum()), border=True)
+                st.metric("Com radioterapia", numero(estrutura_filtro.radioterapia.sum()), border=True)
+                st.metric("Com oncologia pediátrica", numero(estrutura_filtro.pediatria.sum()), border=True)
+            esquerda, direita = st.columns(2)
+            por_uf = estrutura_filtro.groupby(["regiao", "uf"], observed=True).size().reset_index(name="estabelecimentos")
+            esquerda.plotly_chart(px.bar(por_uf, x="uf", y="estabelecimentos", color="regiao",
+                labels={"uf": "UF", "estabelecimentos": "Estabelecimentos", "regiao": "Região"},
+                title="Estabelecimentos por UF", color_discrete_sequence=CORES), key="estrutura_uf")
+            por_tipo = estrutura_filtro.groupby("tipo_principal", observed=True).size().sort_values().reset_index(name="estabelecimentos")
+            direita.plotly_chart(px.bar(por_tipo, x="estabelecimentos", y="tipo_principal", orientation="h",
+                labels={"estabelecimentos": "Estabelecimentos", "tipo_principal": ""},
+                title="Habilitação principal", color="estabelecimentos", color_continuous_scale="Greens"), key="estrutura_tipo")
+            por_natureza = estrutura_filtro.groupby("natureza_juridica", observed=True).size().reset_index(name="estabelecimentos")
+            st.plotly_chart(px.bar(por_natureza, x="natureza_juridica", y="estabelecimentos", color="natureza_juridica",
+                labels={"natureza_juridica": "Natureza jurídica", "estabelecimentos": "Estabelecimentos"},
+                title="Distribuição por natureza jurídica", color_discrete_sequence=CORES), key="estrutura_natureza")
+            busca = st.text_input("Buscar estabelecimento, município ou CNES", key="busca_estrutura")
+            tabela = estrutura_filtro.copy()
+            if busca:
+                alvo = (tabela.estabelecimento + " " + tabela.municipio + " " + tabela.cnes).str.contains(busca, case=False, na=False)
+                tabela = tabela[alvo]
+            exibicao = tabela[["cnes", "estabelecimento", "municipio", "uf", "tipo_principal", "gestao", "natureza_juridica"]].rename(columns={
+                "cnes": "CNES", "estabelecimento": "Estabelecimento", "municipio": "Município", "uf": "UF",
+                "tipo_principal": "Habilitação principal", "gestao": "Gestão", "natureza_juridica": "Natureza jurídica",
+            })
+            st.dataframe(exibicao, hide_index=True)
+            st.download_button("Baixar estrutura filtrada (CSV)", exibicao.to_csv(index=False).encode("utf-8-sig"),
+                               "estrutura_oncologica_cnes.csv", "text/csv", icon=":material/download:")
+        pendencia("Uso ou ocupação", "Exige produção e um denominador validado de capacidade.", "CNES + SIA/SIH + capacidade")
+
+if abas[6].open:
+    with abas[6]:
+        st.subheader("Acesso ao diagnóstico e tratamento")
+        competencia_apac = metadados_apac["ultima_competencia"]
+        st.caption(f"SIA/APAC de 01/2025 a {competencia_apac[4:6]}/{competencia_apac[:4]}. Território corresponde ao local de atendimento.")
+        st.caption("Os totais de 2026 são parciais; compare os mesmos meses ao analisar a evolução anual.")
+        if apac_filtro.empty:
+            st.warning("Não há APACs no recorte selecionado. A base disponível começa em 2025.")
+        else:
+            total_apacs = int(apac_filtro.apacs.sum())
+            quimio = int(apac_filtro.loc[apac_filtro.modalidade == "Quimioterapia", "apacs"].sum())
+            radio = int(apac_filtro.loc[apac_filtro.modalidade == "Radioterapia", "apacs"].sum())
+            total_tempos = int(tempo_apac_filtro.pacientes.sum())
+            ate_60 = int(tempo_apac_filtro.loc[tempo_apac_filtro.faixa_tempo.isin(["Até 30 dias", "31–60 dias"]), "pacientes"].sum())
+            with st.container(horizontal=True):
+                st.metric("Registros mensais de APAC", numero(total_apacs), border=True)
+                st.metric("Quimioterapia", numero(quimio), border=True)
+                st.metric("Radioterapia", numero(radio), border=True)
+                st.metric("Inícios em até 60 dias (por modalidade)", f"{ate_60 / total_tempos:.1%}" if total_tempos else "Indisponível", border=True)
+                st.metric("Registros de início por modalidade", numero(total_tempos), border=True)
+            serie_apac = apac_filtro.groupby(["ano", "mes", "modalidade"], observed=True).apacs.sum().reset_index()
+            serie_apac["competencia"] = pd.to_datetime(dict(year=serie_apac.ano, month=serie_apac.mes, day=1))
+            st.plotly_chart(px.line(serie_apac, x="competencia", y="apacs", color="modalidade", markers=True,
+                labels={"competencia": "Competência", "apacs": "Registros mensais de APAC", "modalidade": "Modalidade"},
+                title="Produção ambulatorial oncológica", color_discrete_sequence=CORES), key="acesso_serie_apac")
+            esquerda, direita = st.columns(2)
+            espera = tempo_apac_filtro.groupby(["faixa_tempo", "modalidade"], observed=True).pacientes.sum().reset_index()
+            esquerda.plotly_chart(px.bar(espera, x="faixa_tempo", y="pacientes", color="modalidade", barmode="group",
+                labels={"faixa_tempo": "Intervalo", "pacientes": "Registros de início por modalidade", "modalidade": "Modalidade"},
+                title="Intervalo entre diagnóstico e tratamento", color_discrete_sequence=CORES), key="acesso_tempo")
+            territorio_apac = apac_filtro.groupby(["regiao_atendimento", "uf_atendimento", "modalidade"], observed=True).apacs.sum().reset_index()
+            direita.plotly_chart(px.bar(territorio_apac, x="uf_atendimento", y="apacs", color="modalidade", barmode="group",
+                labels={"uf_atendimento": "UF do atendimento", "apacs": "Registros mensais de APAC", "modalidade": "Modalidade"},
+                title="Produção por UF de atendimento", color_discrete_sequence=CORES), key="acesso_uf")
+            por_cancer_apac = apac_filtro.groupby(["tipo_cancer", "modalidade"], observed=True).apacs.sum().reset_index()
+            st.dataframe(por_cancer_apac.rename(columns={"tipo_cancer": "Tipo de câncer", "modalidade": "Modalidade", "apacs": "Registros de APAC"}), hide_index=True)
+            st.info("A produção conta registros mensais de APAC. O indicador de tempo deduplica por identificador e modalidade na janela original de processamento; na ausência de identificador, usa a autorização APAC. Uma pessoa pode contribuir uma vez em quimioterapia e outra em radioterapia. O percentual usa registros com intervalo válido, não pessoas únicas entre modalidades. O filtro anual seleciona a competência do registro, e os inícios foram restringidos à janela original da base.")
+        st.divider()
+        st.subheader("Cirurgias oncológicas e deslocamento")
+        if cirurgias_filtro.empty:
+            st.warning("Não há cirurgias do SIH no recorte selecionado. A base disponível começa em 2025.")
+        else:
+            total_cirurgias = int(cirurgias_filtro.internacoes.sum())
+            fora_cirurgia = int(cirurgias_filtro.loc[cirurgias_filtro.fora_municipio, "internacoes"].sum())
+            dist_validas_cirurgia = int(cirurgias_filtro.distancias_validas.sum())
+            distancia_media_cirurgia = cirurgias_filtro.soma_distancia_km.sum() / dist_validas_cirurgia if dist_validas_cirurgia else None
+            total_apac_dist = int(apac_filtro.apacs.sum()) if not apac_filtro.empty else 0
+            fora_apac = int(apac_filtro.loc[apac_filtro.fora_municipio, "apacs"].sum()) if total_apac_dist else 0
+            dist_validas_apac = int(apac_filtro.distancias_validas.sum()) if total_apac_dist else 0
+            distancia_media_apac = apac_filtro.soma_distancia_km.sum() / dist_validas_apac if dist_validas_apac else None
+            with st.container(horizontal=True):
+                st.metric("Internações com cirurgia oncológica", numero(total_cirurgias), border=True)
+                st.metric("Cirurgias fora do município", f"{fora_cirurgia / total_cirurgias:.1%}", border=True)
+                st.metric("Distância média — cirurgia", f"{distancia_media_cirurgia:.1f} km" if distancia_media_cirurgia is not None else "Indisponível", border=True)
+                st.metric("APACs fora do município", f"{fora_apac / total_apac_dist:.1%}" if total_apac_dist else "Indisponível", border=True)
+                st.metric("Distância média — APAC", f"{distancia_media_apac:.1f} km" if distancia_media_apac is not None else "Indisponível", border=True)
+            serie_cirurgia = cirurgias_filtro.groupby(["ano", "mes"], observed=True).internacoes.sum().reset_index()
+            serie_cirurgia["competencia"] = pd.to_datetime(dict(year=serie_cirurgia.ano, month=serie_cirurgia.mes, day=1))
+            st.plotly_chart(px.line(serie_cirurgia, x="competencia", y="internacoes", markers=True,
+                labels={"competencia": "Competência", "internacoes": "Internações"}, title="Cirurgias oncológicas no SIH"), key="acesso_cirurgias")
+            col_dist1, col_dist2 = st.columns(2)
+            dist_cirurgia = cirurgias_filtro.groupby("faixa_distancia", observed=True).internacoes.sum().reset_index()
+            col_dist1.plotly_chart(px.bar(dist_cirurgia, x="faixa_distancia", y="internacoes",
+                labels={"faixa_distancia": "Distância estimada", "internacoes": "Internações"},
+                title="Deslocamento para cirurgia", color="internacoes", color_continuous_scale="Greens"), key="dist_cirurgia")
+            dist_apac = apac_filtro.groupby(["faixa_distancia", "modalidade"], observed=True).apacs.sum().reset_index() if not apac_filtro.empty else pd.DataFrame()
+            if not dist_apac.empty:
+                col_dist2.plotly_chart(px.bar(dist_apac, x="faixa_distancia", y="apacs", color="modalidade", barmode="group",
+                    labels={"faixa_distancia": "Distância estimada", "apacs": "Registros de APAC", "modalidade": "Modalidade"},
+                    title="Deslocamento para quimio/radioterapia", color_discrete_sequence=CORES), key="dist_apac")
+            st.info("Distância em linha reta entre as coordenadas das sedes dos municípios de residência e atendimento. Não representa endereço do paciente nem trajeto rodoviário.")
+        pendencia("Diagnosticados versus tratados", "Exige identificação de caso e início do tratamento.", "Painel Oncológico/RHC")
+        pendencia("Fila APS → regulador → prestador", "Exige timestamps dos eventos locais de regulação.", "Regulador municipal")
+
+if abas[7].open:
+    with abas[7]:
+        st.subheader("Desfechos")
+        st.success("Disponível: óbitos por tipo de câncer, período, idade, sexo e residência.")
+        pendencia("Cura, recorrência e resposta", "Esses eventos não são registrados no SIM.", "RHC/prontuário")
+        pendencia("Sobrevida global e livre de doença", "Exige coorte, data inicial, seguimento, óbito vinculado e censura.", "RHC/prontuário + SIM")
+        pendencia("Tratamento e desfecho", "A análise precisa controlar estágio, gravidade e seleção do paciente.", "Base clínica longitudinal")
+
+if abas[8].open:
+    with abas[8]:
+        st.subheader("Câncer pediátrico")
+        ped = filtro[filtro.segmento == "Pediátrico"]
+        with st.container(horizontal=True):
+            st.metric("Óbitos de 0 a 19 anos", numero(soma(ped)), border=True)
+            st.metric("Participação nos óbitos filtrados", f"{soma(ped) / soma(filtro):.1%}" if soma(filtro) else "Indisponível", border=True)
+        if not ped.empty:
+            barras(ped, "tipo_cancer", "Mortalidade pediátrica por grupo derivado da CID-10", "ped_tipo")
+        st.divider()
+        st.subheader("Casos hospitalares por CICI/ICCC-3")
+        st.caption("Integrador RHC/INCA, 2019–2023. Classificação derivada de topografia, morfologia e comportamento CID-O-3.")
+        st.caption("Recorte diagnóstico: filtro próprio Grupo CICI/ICCC-3 (RHC). Região e UF correspondem à residência; o filtro de tipo do SIM/SIA/SIH não se aplica a esta classificação.")
+        st.warning("A base pública usada exclui São Paulo e 2023 está parcial. RHC descreve casos atendidos pelos hospitais participantes e não mede incidência populacional.")
+        if rhc_ped_filtro.empty:
+            st.info("Não há casos do RHC pediátrico no período ou recorte territorial selecionado.")
+        else:
+            total_rhc = int(rhc_ped_filtro.casos.sum())
+            classificados = int(rhc_ped_filtro.loc[rhc_ped_filtro.recode_iccc != "999", "casos"].sum())
+            com_tratamento = int(rhc_ped_filtro.loc[rhc_ped_filtro.tratamento_com_data, "casos"].sum())
+            tempos_validos = rhc_ped_filtro[~rhc_ped_filtro.faixa_tempo.isin([
+                "Sem intervalo calculável", "Tratamento anterior ao diagnóstico informado"
+            ])]
+            total_tempo = int(tempos_validos.casos.sum())
+            ate_60 = int(tempos_validos.loc[tempos_validos.faixa_tempo.isin(["Até 30 dias", "31–60 dias"]), "casos"].sum())
+            with st.container(horizontal=True):
+                st.metric("Casos registrados no RHC", numero(total_rhc), border=True)
+                st.metric("Classificados na ICCC-3", f"{classificados / total_rhc:.1%}", border=True)
+                st.metric("Com data de tratamento", f"{com_tratamento / total_rhc:.1%}", border=True)
+                st.metric("Tratamento em até 60 dias", f"{ate_60 / total_tempo:.1%}" if total_tempo else "Indisponível", border=True)
+            grupos_rhc = rhc_ped_filtro.groupby("grupo_iccc", observed=True).casos.sum().sort_values().reset_index()
+            st.plotly_chart(px.bar(grupos_rhc, x="casos", y="grupo_iccc", orientation="h", color="casos",
+                labels={"casos": "Casos registrados", "grupo_iccc": ""}, title="Casos por grupo CICI/ICCC-3",
+                color_continuous_scale="Greens"), key="ped_iccc_grupos")
+            st.subheader("Hierarquia diagnóstica")
+            st.caption("O tamanho de cada retângulo representa o número de casos. Clique em um grupo para abrir seus subgrupos.")
+            hierarquia_iccc = rhc_ped_filtro.groupby(
+                ["grupo_iccc", "subgrupo_iccc"], observed=True
+            ).casos.sum().reset_index()
+            hierarquia_iccc["classificacao"] = "CICI/ICCC-3"
+            figura_iccc = px.treemap(
+                hierarquia_iccc, path=["classificacao", "grupo_iccc", "subgrupo_iccc"], values="casos",
+                color="grupo_iccc", color_discrete_sequence=CORES,
+                labels={"classificacao": "Classificação", "grupo_iccc": "Grupo", "subgrupo_iccc": "Subgrupo", "casos": "Casos"},
+                title="CICI/ICCC-3: grupos → subgrupos",
+            )
+            figura_iccc.update_traces(hovertemplate="<b>%{label}</b><br>Casos: %{value:,.0f}<br>Participação no nível: %{percentParent:.1%}<extra></extra>")
+            st.plotly_chart(figura_iccc, key="ped_iccc_hierarquia")
+            grupos_classificados = rhc_ped_filtro.loc[rhc_ped_filtro.recode_iccc != "999"].groupby(
+                "grupo_iccc", observed=True).casos.sum().sort_values(ascending=False)
+            if not grupos_classificados.empty:
+                grupo_detalhado = st.selectbox("Grupo CICI/ICCC-3 para detalhar", grupos_classificados.index.tolist())
+                subgrupos_rhc = rhc_ped_filtro[
+                    rhc_ped_filtro.grupo_iccc == grupo_detalhado
+                ].groupby("subgrupo_iccc", observed=True).casos.sum().sort_values().reset_index()
+                st.plotly_chart(px.bar(subgrupos_rhc, x="casos", y="subgrupo_iccc", orientation="h", color="casos",
+                    labels={"casos": "Casos registrados", "subgrupo_iccc": ""},
+                    title=f"Subgrupos de {grupo_detalhado}", color_continuous_scale="Greens"), key="ped_iccc_subgrupos")
+            esquerda_rhc, direita_rhc = st.columns(2)
+            serie_rhc = rhc_ped_filtro.groupby("ano", observed=True).casos.sum().reset_index()
+            esquerda_rhc.plotly_chart(px.line(serie_rhc, x="ano", y="casos", markers=True,
+                labels={"ano": "Ano da primeira consulta", "casos": "Casos registrados"},
+                title="Casos pediátricos registrados por ano"), key="ped_iccc_serie")
+            tempos_rhc = rhc_ped_filtro.groupby("faixa_tempo", observed=True).casos.sum().reset_index()
+            direita_rhc.plotly_chart(px.bar(tempos_rhc, x="faixa_tempo", y="casos", color="casos",
+                labels={"faixa_tempo": "Intervalo registrado", "casos": "Casos"},
+                title="Intervalo entre diagnóstico e início do tratamento", color_continuous_scale="Greens"), key="ped_iccc_tempo")
+            st.info("O indicador de tratamento usa a presença de data de início no RHC. Casos sem data e datas anteriores ao diagnóstico informado não entram no percentual de até 60 dias.")
+            st.subheader("Primeiro tratamento no hospital")
+            tratamentos_rhc = rhc_ped_filtro.groupby("primeiro_tratamento", observed=True).casos.sum().sort_values().reset_index()
+            st.plotly_chart(px.bar(tratamentos_rhc, x="casos", y="primeiro_tratamento", orientation="h", color="casos",
+                labels={"casos": "Casos registrados", "primeiro_tratamento": ""},
+                title="Modalidade ou combinação registrada como primeiro tratamento", color_continuous_scale="Greens"),
+                key="ped_iccc_tratamento")
+            sem_tratamento = rhc_ped_filtro[rhc_ped_filtro.primeiro_tratamento == "Nenhum tratamento no hospital"]
+            if not sem_tratamento.empty:
+                razoes_rhc = sem_tratamento.groupby("razao_nao_tratamento", observed=True).casos.sum().sort_values().reset_index()
+                st.plotly_chart(px.bar(razoes_rhc, x="casos", y="razao_nao_tratamento", orientation="h", color="casos",
+                    labels={"casos": "Casos", "razao_nao_tratamento": ""},
+                    title="Razão registrada para ausência de tratamento no hospital", color_continuous_scale="Greens"),
+                    key="ped_iccc_razao")
+            with st.expander("Qualidade e completude dos registros"):
+                sem_classificacao = total_rhc - classificados
+                sem_data = int(rhc_ped_filtro.loc[rhc_ped_filtro.faixa_tempo == "Sem intervalo calculável", "casos"].sum())
+                data_inconsistente = int(rhc_ped_filtro.loc[
+                    rhc_ped_filtro.faixa_tempo == "Tratamento anterior ao diagnóstico informado", "casos"].sum())
+                uf_ignorada = int(rhc_ped_filtro.loc[
+                    rhc_ped_filtro.uf_residencia.isin(["", "Ignorada", "99"]), "casos"].sum())
+                tratamento_ignorado = int(rhc_ped_filtro.loc[
+                    rhc_ped_filtro.primeiro_tratamento == "Sem informação", "casos"].sum())
+                qualidade_rhc = pd.DataFrame([
+                    ["Sem classificação ICCC-3", sem_classificacao, sem_classificacao / total_rhc],
+                    ["Sem intervalo diagnóstico–tratamento calculável", sem_data, sem_data / total_rhc],
+                    ["Data de tratamento anterior ao diagnóstico informado", data_inconsistente, data_inconsistente / total_rhc],
+                    ["UF de residência ignorada", uf_ignorada, uf_ignorada / total_rhc],
+                    ["Primeiro tratamento sem informação", tratamento_ignorado, tratamento_ignorado / total_rhc],
+                ], columns=["Indicador", "Casos", "Percentual"])
+                st.dataframe(qualidade_rhc, hide_index=True, column_config={
+                    "Percentual": st.column_config.NumberColumn("Percentual", format="percent")
+                })
+        pendencia("Casas de apoio", "Exige cadastro georreferenciado e vínculo com centros pediátricos.", "Cadastro local + CNES")
+        pendencia("Qualidade de vida, escola e doenças secundárias", "Não são inferíveis de registros de mortalidade.", "Prontuário + pesquisa primária")
+
+if abas[1].open:
+    with abas[1]:
+        st.subheader("Custos SIA/SIH")
+        st.caption("Valores administrativos da atenção ambulatorial e hospitalar em oncologia, conforme os filtros do painel.")
+        st.link_button(
+            "Fonte: DATASUS",
+            "https://ftp.datasus.gov.br/dissemin/publicos/",
+            icon=":material/database:",
         )
-        direita_custos.plotly_chart(px.bar(
-            por_territorio,
-            x="valor",
-            y="uf_atendimento",
-            color="regiao_atendimento",
-            orientation="h",
-            labels={"valor": "Valor (R$)", "uf_atendimento": "UF", "regiao_atendimento": "Região"},
-            title="15 UFs com maiores valores",
-            color_discrete_sequence=CORES,
-        ), key="custos_territorio")
-        st.info(metadados_custos["interpretacao"])
-        st.download_button(
-            "Baixar custos filtrados (CSV)",
-            custos_filtro.to_csv(index=False).encode("utf-8-sig"),
-            "custos_oncologia_sia_sih_filtrados.csv",
-            "text/csv",
-            icon=":material/download:",
-        )
 
-with abas[9]:
-    st.subheader("Cobertura do Dashboard")
-    cobertura = pd.DataFrame([
-        ["Incidência por tipo, tempo e perfil", "Aguardando fonte", "RCBP + IBGE"],
-        ["Hospitais, natureza jurídica e serviços habilitados", "Disponível", "CNES/SAES"],
-        ["Uso e ocupação da estrutura", "Aguardando produção/capacidade", "CNES + SIA/SIH"],
-        ["Tempo entre diagnóstico e tratamento entre APACs", "Disponível", "SIA/APAC"],
-        ["Proporção diagnosticada que foi tratada", "Aguardando coorte de casos", "Painel Oncológico/RHC"],
-        ["Quimioterapia e radioterapia ambulatoriais", "Disponível", "SIA/APAC"],
-        ["Cirurgias oncológicas", "Disponível", "SIH/AIH"],
-        ["Distância municipal residência–tratamento", "Disponível (estimativa)", "SIA/SIH + coordenadas municipais"],
-        ["Mortalidade por tipo, tempo, idade, sexo e local", "Disponível", "SIM"],
-        ["Taxa populacional de mortalidade", "Disponível (bruta/específica)", "SIM + IBGE"],
-        ["Cura, recorrência e sobrevida", "Aguardando fonte", "Coorte clínica + SIM"],
-        ["Fila de regulação", "Aguardando fonte", "Regulador municipal"],
-        ["ICCC-3", "Disponível para casos pediátricos hospitalares", "RHC com CID-O-3"],
-        ["Acolhimento, vida social/escolar e efeitos tardios", "Aguardando fonte", "Cadastros/prontuário/pesquisa"],
-    ], columns=["Pergunta", "Situação", "Fonte mínima"])
-    st.dataframe(cobertura, hide_index=True)
-    st.caption("Os valores administrativos de oncologia estão disponíveis na aba Custos.")
+        ultima_competencia_custos = str(metadados_custos["ultima_competencia"])
+        ultimo_ano_custos = int(ultima_competencia_custos[:4])
+        ultimo_mes_custos = int(ultima_competencia_custos[4:])
+        if ultimo_mes_custos < 12 and periodo[0] <= ultimo_ano_custos <= periodo[1]:
+            st.warning(
+                f"Base em atualização: {ultimo_ano_custos} possui dados processados até "
+                f"{MESES[ultimo_mes_custos - 1]}. "
+                "Totais do ano podem estar incompletos."
+            )
 
-with abas[10]:
-    st.subheader("Fonte e interpretação")
-    st.table({"Fonte": metadados["fonte"], "Critério": metadados["criterio"],
-        "Período do arquivo": f"{metadados['periodo'][0]}–{metadados['periodo'][1]}",
-        "Arquivos nacionais processados": str(metadados["arquivos"]),
-        "Total de óbitos oncológicos": numero(metadados["total_obitos"])}, border="horizontal", width="content")
-    if anos_provisorios:
-        st.table({f"SIM {ano}": situacao for ano, situacao in sorted(anos_provisorios.items())},
-                 border="horizontal", width="content")
-    st.table({"Denominador": metadados_pop["fonte"], "Referência": metadados_pop["referencia"],
-        "Período populacional usado": f"{metadados_pop['periodo'][0]}–{min(metadados_pop['periodo'][1], int(sim.ano.max()))}"},
-        border="horizontal", width="content")
-    st.table({"Estrutura": metadados_estrutura["fonte"], "Competência": metadados_estrutura["competencia"],
-        "Critério": metadados_estrutura["criterio"], "Identificação nominal": metadados_estrutura["nomes_fonte"]},
-        border="horizontal", width="content")
-    st.table({"Tratamento ambulatorial": metadados_apac["fonte"], "Período": f"{metadados_apac['periodo'][0]}–{metadados_apac['periodo'][1]}",
-        "Última competência": metadados_apac["ultima_competencia"], "Limite": metadados_apac["limite"]},
-        border="horizontal", width="content")
-    st.table({"Cirurgias": metadados_cirurgias["fonte"], "Critério": metadados_cirurgias["criterio"],
-        "Última competência": metadados_cirurgias["ultima_competencia"], "Distância": metadados_cirurgias["distancia"]},
-        border="horizontal", width="content")
-    st.table({"Oncologia pediátrica": metadados_rhc["fonte"],
-        "Período": f"{metadados_rhc['periodo'][0]}–{metadados_rhc['periodo'][1]}",
-        "Cobertura": metadados_rhc["cobertura_geografica"], "Classificação": metadados_rhc["classificacao"],
-        "Unidade de análise": metadados_rhc["unidade"]}, border="horizontal", width="content")
-    st.table({"Custos SIA/SIH": metadados_custos["fonte"],
-        "Período": f"{metadados_custos['periodo'][0]}–{metadados_custos['periodo'][1]}",
-        "Última competência": metadados_custos["ultima_competencia"],
-        "Critério SIA": metadados_custos["criterio_sia"], "Critério SIH": metadados_custos["criterio_sih"]},
-        border="horizontal", width="content")
-    st.markdown("- Foram usados os arquivos nacionais `DOBR`; os estaduais não foram somados novamente.\n"
-                "- Tipo de câncer é derivado da causa básica CID-10.\n"
-                "- Contagem de óbitos não é incidência nem letalidade.\n"
-                "- Os dados preliminares/prévios entram nas contagens, mas não nas taxas anuais.\n"
-                "- As taxas usam pessoa-anos projetadas pelo IBGE e ainda não são padronizadas por idade.\n"
-                "- A projeção IBGE — Revisão 2024 cobre 2000 em diante; 1996–1999 permanecem apenas em contagens.\n"
-                "- Habilitação no CNES indica autorização cadastrada; não mede produção, capacidade ou ocupação.")
-    st.download_button("Baixar recorte agregado (CSV)", filtro.to_csv(index=False).encode("utf-8-sig"),
-                       "sim_oncologia_filtrado.csv", "text/csv", icon=":material/download:")
+        if custos_filtro.empty:
+            st.info("Não há valores SIA/SIH para os filtros e o período selecionados.")
+        else:
+            total_custos = float(custos_filtro.valor.sum())
+            total_sia = float(custos_filtro.loc[custos_filtro.sistema == "SIA", "valor"].sum())
+            total_sih = float(custos_filtro.loc[custos_filtro.sistema == "SIH", "valor"].sum())
+            serie_mensal_custos = (
+                custos_filtro.groupby(["ano", "mes"], observed=True).valor.sum().reset_index()
+            )
+            serie_mensal_custos["competencia"] = pd.to_datetime(dict(
+                year=serie_mensal_custos.ano, month=serie_mensal_custos.mes, day=1
+            ))
+
+            with st.container(horizontal=True):
+                st.metric(
+                    "Custo total em oncologia",
+                    moeda_compacta(total_custos),
+                    help="Soma dos valores aprovados no SIA e registrados nas AIH.",
+                    border=True,
+                    chart_data=serie_mensal_custos.valor.tolist(),
+                    chart_type="bar",
+                )
+                st.metric(
+                    "Custos SIA",
+                    moeda_compacta(total_sia),
+                    help="Valor aprovado da produção ambulatorial (AP_VL_AP).",
+                    border=True,
+                )
+                st.metric(
+                    "Custos SIH",
+                    moeda_compacta(total_sih),
+                    help="Valor total registrado nas AIH (VAL_TOT).",
+                    border=True,
+                )
+
+            periodicidade_custos = st.segmented_control(
+                "Evolução dos valores",
+                ["Mensal", "Anual"],
+                default="Mensal",
+                key="custos_periodicidade",
+            )
+            if periodicidade_custos == "Mensal":
+                serie_custos = serie_mensal_custos
+                eixo_custos = "competencia"
+            else:
+                serie_custos = custos_filtro.groupby("ano", observed=True).valor.sum().reset_index()
+                eixo_custos = "ano"
+            st.plotly_chart(px.bar(
+                serie_custos,
+                x=eixo_custos,
+                y="valor",
+                labels={eixo_custos: "Competência" if periodicidade_custos == "Mensal" else "Ano", "valor": "Valor (R$)"},
+                title="Evolução dos valores administrativos",
+                color_discrete_sequence=["#0f766e"],
+            ), key="custos_evolucao")
+
+            esquerda_custos, direita_custos = st.columns(2)
+            por_modalidade = custos_filtro.groupby(["modalidade", "sistema"], observed=True).valor.sum().reset_index()
+            esquerda_custos.plotly_chart(px.bar(
+                por_modalidade,
+                x="modalidade",
+                y="valor",
+                color="sistema",
+                labels={"modalidade": "Modalidade", "valor": "Valor (R$)", "sistema": "Sistema"},
+                title="Composição por modalidade",
+                color_discrete_sequence=["#46639b", "#b85d2d"],
+            ), key="custos_modalidade")
+            por_territorio = (
+                custos_filtro.groupby(["uf_atendimento", "regiao_atendimento"], observed=True).valor.sum()
+                .sort_values(ascending=False).head(15).reset_index()
+            )
+            direita_custos.plotly_chart(px.bar(
+                por_territorio,
+                x="valor",
+                y="uf_atendimento",
+                color="regiao_atendimento",
+                orientation="h",
+                labels={"valor": "Valor (R$)", "uf_atendimento": "UF", "regiao_atendimento": "Região"},
+                title="15 UFs com maiores valores",
+                color_discrete_sequence=CORES,
+            ), key="custos_territorio")
+            st.info(metadados_custos["interpretacao"])
+            st.download_button(
+                "Baixar custos filtrados (CSV)",
+                custos_filtro.to_csv(index=False).encode("utf-8-sig"),
+                "custos_oncologia_sia_sih_filtrados.csv",
+                "text/csv",
+                icon=":material/download:",
+            )
+
+if abas[9].open:
+    with abas[9]:
+        st.subheader("Cobertura do Dashboard")
+        cobertura = pd.DataFrame([
+            ["Incidência por tipo, tempo e perfil", "Aguardando fonte", "RCBP + IBGE"],
+            ["Hospitais, natureza jurídica e serviços habilitados", "Disponível", "CNES/SAES"],
+            ["Uso e ocupação da estrutura", "Aguardando produção/capacidade", "CNES + SIA/SIH"],
+            ["Tempo entre diagnóstico e tratamento entre APACs", "Disponível", "SIA/APAC"],
+            ["Proporção diagnosticada que foi tratada", "Aguardando coorte de casos", "Painel Oncológico/RHC"],
+            ["Quimioterapia e radioterapia ambulatoriais", "Disponível", "SIA/APAC"],
+            ["Cirurgias oncológicas", "Disponível", "SIH/AIH"],
+            ["Distância municipal residência–tratamento", "Disponível (estimativa)", "SIA/SIH + coordenadas municipais"],
+            ["Mortalidade por tipo, tempo, idade, sexo e local", "Disponível", "SIM"],
+            ["Taxa populacional de mortalidade", "Disponível (bruta/específica)", "SIM + IBGE"],
+            ["Cura, recorrência e sobrevida", "Aguardando fonte", "Coorte clínica + SIM"],
+            ["Fila de regulação", "Aguardando fonte", "Regulador municipal"],
+            ["ICCC-3", "Disponível para casos pediátricos hospitalares", "RHC com CID-O-3"],
+            ["Acolhimento, vida social/escolar e efeitos tardios", "Aguardando fonte", "Cadastros/prontuário/pesquisa"],
+        ], columns=["Pergunta", "Situação", "Fonte mínima"])
+        st.dataframe(cobertura, hide_index=True)
+        st.caption("Os valores administrativos de oncologia estão disponíveis na aba Custos.")
+
+if abas[10].open:
+    with abas[10]:
+        st.subheader("Fonte e interpretação")
+        st.table({"Fonte": metadados["fonte"], "Critério": metadados["criterio"],
+            "Período do arquivo": f"{metadados['periodo'][0]}–{metadados['periodo'][1]}",
+            "Arquivos nacionais processados": str(metadados["arquivos"]),
+            "Total de óbitos oncológicos": numero(metadados["total_obitos"])}, border="horizontal", width="content")
+        if anos_provisorios:
+            st.table({f"SIM {ano}": situacao for ano, situacao in sorted(anos_provisorios.items())},
+                     border="horizontal", width="content")
+        st.table({"Denominador": metadados_pop["fonte"], "Referência": metadados_pop["referencia"],
+            "Período populacional usado": f"{metadados_pop['periodo'][0]}–{min(metadados_pop['periodo'][1], int(sim.ano.max()))}"},
+            border="horizontal", width="content")
+        st.table({"Estrutura": metadados_estrutura["fonte"], "Competência": metadados_estrutura["competencia"],
+            "Critério": metadados_estrutura["criterio"], "Identificação nominal": metadados_estrutura["nomes_fonte"]},
+            border="horizontal", width="content")
+        st.table({"Tratamento ambulatorial": metadados_apac["fonte"], "Período": f"{metadados_apac['periodo'][0]}–{metadados_apac['periodo'][1]}",
+            "Última competência": metadados_apac["ultima_competencia"], "Limite": metadados_apac["limite"]},
+            border="horizontal", width="content")
+        st.table({"Cirurgias": metadados_cirurgias["fonte"], "Critério": metadados_cirurgias["criterio"],
+            "Última competência": metadados_cirurgias["ultima_competencia"], "Distância": metadados_cirurgias["distancia"]},
+            border="horizontal", width="content")
+        st.table({"Oncologia pediátrica": metadados_rhc["fonte"],
+            "Período": f"{metadados_rhc['periodo'][0]}–{metadados_rhc['periodo'][1]}",
+            "Cobertura": metadados_rhc["cobertura_geografica"], "Classificação": metadados_rhc["classificacao"],
+            "Unidade de análise": metadados_rhc["unidade"]}, border="horizontal", width="content")
+        st.table({"Custos SIA/SIH": metadados_custos["fonte"],
+            "Período": f"{metadados_custos['periodo'][0]}–{metadados_custos['periodo'][1]}",
+            "Última competência": metadados_custos["ultima_competencia"],
+            "Critério SIA": metadados_custos["criterio_sia"], "Critério SIH": metadados_custos["criterio_sih"]},
+            border="horizontal", width="content")
+        st.markdown("- Foram usados os arquivos nacionais `DOBR`; os estaduais não foram somados novamente.\n"
+                    "- Tipo de câncer é derivado da causa básica CID-10.\n"
+                    "- Contagem de óbitos não é incidência nem letalidade.\n"
+                    "- Os dados preliminares/prévios entram nas contagens, mas não nas taxas anuais.\n"
+                    "- As taxas usam pessoa-anos projetadas pelo IBGE e ainda não são padronizadas por idade.\n"
+                    "- A projeção IBGE — Revisão 2024 cobre 2000 em diante; 1996–1999 permanecem apenas em contagens.\n"
+                    "- Habilitação no CNES indica autorização cadastrada; não mede produção, capacidade ou ocupação.")
+        st.download_button("Baixar recorte agregado (CSV)", filtro.to_csv(index=False).encode("utf-8-sig"),
+                           "sim_oncologia_filtrado.csv", "text/csv", icon=":material/download:")

@@ -1,0 +1,15 @@
+{
+  "sha256_fonte": "e87542d26c1087c84def69a13ee5c7116e86bd178c92267a68359e9fabce007a",
+  "metadados": {
+    "fonte": "IBGE — Projeções da População, Revisão 2024",
+    "referencia": "População em 1º de julho, por UF, sexo e idade simples",
+    "periodo": [
+      2000,
+      2026
+    ],
+    "revisao": 2024
+  },
+  "tabelas": {
+    "dados": "populacao_ibge_dados.parquet"
+  }
+}

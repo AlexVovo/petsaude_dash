@@ -28,6 +28,18 @@ Use estas coordenadas na tela **Create app**:
 
 O aplicativo não exige secrets nem pacotes Linux adicionais.
 
+### Leitura compacta para hospedagem
+
+O painel usa as cópias Parquet em `dados/compactados` para reduzir o consumo de memória. Os JSONs originais permanecem como referência. A leitura confere o SHA-256 do JSON antes de usar a cópia compacta; se a fonte mudar, o painel volta a ler o JSON para evitar dados desatualizados.
+
+Após gerar ou atualizar qualquer agregado, execute:
+
+```bash
+.venv/bin/python gerar_dados_compactos.py
+```
+
+O comando confere todos os valores após a conversão. Inclua os arquivos de `dados/compactados` na publicação junto com o código e `requirements.txt`. A dependência PyArrow é limitada a versões anteriores à 25, seguindo a mitigação informada nos logs do Community Cloud.
+
 ## Gerar o agregado do SIM
 
 Com os CSVs nacionais e estaduais na pasta informada, execute:

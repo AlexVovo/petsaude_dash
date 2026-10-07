@@ -1,0 +1,14 @@
+{
+  "sha256_fonte": "5039138576f9f3855c1a008277e56d33055bb4692869a50b5e35301de2e49968",
+  "metadados": {
+    "fonte": "CNES/DATASUS — habilitações de estabelecimentos",
+    "competencia": "202607",
+    "criterio": "Habilitações oncológicas 17.04 e 17.06–17.16 ativas na competência",
+    "nomes_fonte": "Lista nominal SAES de dezembro de 2024; novos CNES podem aparecer sem nome",
+    "total_estabelecimentos": 387,
+    "total_cacon_unacon": 338
+  },
+  "tabelas": {
+    "dados": "estrutura_oncologia_cnes_dados.parquet"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "sha256_fonte": "9b194934b1b7b0d994fe05aaa97d93b61402c2b1b07b78794315f6d411874d8c",
+  "metadados": {
+    "fonte": "Sistema de Informações sobre Mortalidade (SIM/DATASUS)",
+    "criterio": "Causa básica CID-10 C00–C97",
+    "unidade": "óbitos",
+    "arquivos": 31,
+    "periodo": [
+      1996,
+      2026
+    ],
+    "total_obitos": 5344014,
+    "registros_excluidos_data_invalida": 93,
+    "gerado_em_utc": "2026-09-20T13:40:07.533051+00:00",
+    "observacao": "Contagens de óbitos; não são taxas populacionais nem incidência.",
+    "periodos_provisorios": {
+      "2025": "preliminar",
+      "2026": "1ª prévia; extração em 01/06/2026"
+    }
+  },
+  "tabelas": {
+    "dados": "sim_oncologia_agregado_dados.parquet"
+  }
+}
