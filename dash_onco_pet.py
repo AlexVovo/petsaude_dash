@@ -243,7 +243,7 @@ taxa_periodo = soma(obitos_taxa) / pop_filtro.populacao.sum() * 100_000 if taxa_
 
 with st.container(border=True):
     st.caption(":material/account_balance: PROGRAMA DE EDUCAÇÃO PELO TRABALHO PARA A SAÚDE • GOVERNO FEDERAL")
-    st.title("PET-Saúde | Painel integrado de oncologia", icon=":material/monitoring:")
+    st.title("PET-Saúde | Painel integrado de oncologia | Pet Conecta Onco", icon=":material/monitoring:")
     st.markdown(
         "**Inteligência em saúde para apoiar ensino, pesquisa e gestão do cuidado oncológico no SUS.**"
     )
