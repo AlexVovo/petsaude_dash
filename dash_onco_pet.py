@@ -444,6 +444,10 @@ if abas[3].open:
                 labels={"regiao": "Região", "uf": "UF", "tipo_cancer": "Tipo de câncer", "obitos": "Óbitos"},
                 title="Região → UF → tipo de câncer",
             )
+            figura_territorial.update_layout(
+                height=800,
+                margin=dict(t=60, b=20, l=20, r=20),
+            )
             figura_territorial.update_traces(hovertemplate="<b>%{label}</b><br>Óbitos: %{value:,.0f}<br>Participação no nível: %{percentParent:.1%}<extra></extra>")
             st.plotly_chart(figura_territorial, key="perfil_hierarquia_territorial")
 
